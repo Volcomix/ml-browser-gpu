@@ -32,5 +32,8 @@
   "lint-staged": {
     "*.{js,ts}": "eslint --cache --fix --max-warnings 0",
     "*.{js,ts,css,htm,html,md}": "prettier --cache --write"
+  },
+  "dependencies": {
+    "twgl.js": "^5.4.1"
   }
 }
