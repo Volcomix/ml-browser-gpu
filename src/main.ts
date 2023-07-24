@@ -71,3 +71,6 @@ twgl.drawBufferInfo(gl, bufferInfo)
 const y = new Float32Array(5)
 gl.readPixels(0, 0, 5, 1, gl.RED, gl.FLOAT, y)
 console.log(`y: ${y}`)
+
+// TODO Remove one of models/fashion-mnist/layer1-weight.bin
+//                 or models/fashion-mnist/layer1-weight.gz
