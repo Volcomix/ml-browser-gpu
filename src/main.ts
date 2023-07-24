@@ -12,13 +12,9 @@ twgl.addExtensionsToContext(gl)
 const vertexShader = /* glsl */ `#version 300 es
      
   in vec2 inPosition;
-  in vec2 inTexCoord;
-
-  out vec2 texCoord;
 
   void main() {
     gl_Position = vec4(inPosition, 0, 1);
-    texCoord = inTexCoord;
   }
 `
 
@@ -28,12 +24,10 @@ const fragmentShader = /* glsl */ `#version 300 es
   
   uniform sampler2D x;
 
-  in vec2 texCoord;
-
   out float result;
 
   void main() {
-    result = texture(x, texCoord).r; // TODO Use texelFetch instead
+    result = texelFetch(x, ivec2(gl_FragCoord), 0).r;
   }
 `
 
@@ -41,7 +35,6 @@ const programInfo = twgl.createProgramInfo(gl, [vertexShader, fragmentShader])
 
 const arrays = {
   inPosition: [-1, -1, 0, 1, -1, 0, -1, 1, 0, -1, 1, 0, 1, -1, 0, 1, 1, 0],
-  inTexCoord: [0, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 1],
 }
 const bufferInfo = twgl.createBufferInfoFromArrays(gl, arrays)
 
