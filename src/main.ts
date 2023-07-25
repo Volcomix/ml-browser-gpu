@@ -15,6 +15,13 @@ console.log(
     .join(', ')}, ...`,
 )
 
+const layer1Bias = await fetchParameter('layer1-bias')
+console.log(
+  `Layer 1 bias: ${[...layer1Bias.slice(0, 3)]
+    .map((value) => value.toFixed(7))
+    .join(', ')}, ...`,
+)
+
 const canvas = new OffscreenCanvas(1, 1)
 const gl = canvas.getContext('webgl2')
 if (!gl) {
@@ -35,12 +42,17 @@ const fragmentShader = /* glsl */ `#version 300 es
 
   precision highp float;
   
-  uniform sampler2D x;
+  uniform sampler2D xTex;
+  uniform sampler2D weightTex;
 
   out float result;
 
   void main() {
-    result = texelFetch(x, ivec2(gl_FragCoord), 0).r;
+    ivec2 fragCoord = ivec2(gl_FragCoord);
+    ivec2 weightCoord = ivec2(fragCoord.x * fragCoord.y, 0);
+    float x = texelFetch(xTex, fragCoord, 0).r;
+    float weight = texelFetch(weightTex, weightCoord, 0).r;
+    result = x * weight;
   }
 `
 
@@ -51,21 +63,39 @@ const arrays = {
 }
 const bufferInfo = twgl.createBufferInfoFromArrays(gl, arrays)
 
-const textures = twgl.createTextures(gl, {
-  x: { internalFormat: gl.R32F, src: [1, 2, 3, 4, 5] },
+type Textures = {
+  x: WebGLTexture
+  weight: WebGLTexture
+}
+
+const textures = await new Promise<Textures>((resolve) => {
+  const result = twgl.createTextures(
+    gl,
+    {
+      x: { src: 'data/fashion-mnist/0.png' },
+      weight: {
+        src: layer1Weight,
+        internalFormat: gl.R32F,
+        width: 784,
+        height: 512,
+      },
+    },
+    () => resolve(result),
+  ) as Textures
 })
 
 const frameBufferInfo = twgl.createFramebufferInfo(
   gl,
   [{ internalFormat: gl.R32F }],
-  5,
-  1,
+  28,
+  28,
 )
 
-gl.viewport(0, 0, 5, 1)
+gl.viewport(0, 0, 28, 28)
 
 const uniforms = {
-  x: textures.x,
+  xTex: textures.x,
+  weightTex: textures.weight,
 }
 
 gl.bindFramebuffer(gl.FRAMEBUFFER, frameBufferInfo.framebuffer)
@@ -74,6 +104,6 @@ twgl.setBuffersAndAttributes(gl, programInfo, bufferInfo)
 twgl.setUniforms(programInfo, uniforms)
 twgl.drawBufferInfo(gl, bufferInfo)
 
-const y = new Float32Array(5)
-gl.readPixels(0, 0, 5, 1, gl.RED, gl.FLOAT, y)
+const y = new Float32Array(784)
+gl.readPixels(0, 0, 28, 28, gl.RED, gl.FLOAT, y)
 console.log(`y: ${y.join(', ')}`)
