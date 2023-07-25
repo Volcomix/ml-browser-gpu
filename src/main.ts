@@ -49,7 +49,7 @@ const layer1WeightFragmentShader = /* glsl */ `#version 300 es
 
   void main() {
     ivec2 fragCoord = ivec2(gl_FragCoord);
-    ivec2 weightCoord = ivec2(fragCoord.x * fragCoord.y, 0);
+    ivec2 weightCoord = ivec2(fragCoord.y * 28 + fragCoord.x, 0);
     float x = texelFetch(xTex, fragCoord, 0).r;
     float weight = texelFetch(weightTex, weightCoord, 0).r;
     y = x * weight;
