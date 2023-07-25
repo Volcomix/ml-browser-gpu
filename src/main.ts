@@ -67,9 +67,9 @@ const layer1BiasFragmentShader = /* glsl */ `#version 300 es
 
   void main() {
     ivec2 fragCoord = ivec2(gl_FragCoord);
-    float x = texelFetch(xTex, fragCoord, 4).r * 784.0;
+    float x = texelFetch(xTex, fragCoord, 5).r * 1024.0;
     float bias = texelFetch(biasTex, fragCoord, 0).r;
-    y = x /* + bias */; // FIXME Wrong result
+    y = x + bias;
   }
 `
 
@@ -119,8 +119,8 @@ const textures = await new Promise<Textures>((resolve) => {
 const layer1WeightFrameBufferInfo = twgl.createFramebufferInfo(
   gl,
   [{ internalFormat: gl.R32F }],
-  28,
-  28,
+  32,
+  32,
 )
 
 const layer1BiasFrameBufferInfo = twgl.createFramebufferInfo(
@@ -130,7 +130,7 @@ const layer1BiasFrameBufferInfo = twgl.createFramebufferInfo(
   1,
 )
 
-gl.viewport(0, 0, 28, 28)
+gl.viewport(0, 0, 32, 32)
 
 const layer1WeightUniforms = {
   xTex: textures.x,
@@ -142,14 +142,6 @@ gl.useProgram(layer1WeightProgramInfo.program)
 twgl.setBuffersAndAttributes(gl, layer1WeightProgramInfo, bufferInfo)
 twgl.setUniforms(layer1WeightProgramInfo, layer1WeightUniforms)
 twgl.drawBufferInfo(gl, bufferInfo)
-
-const layer1WeightY = new Float32Array(784)
-gl.readPixels(0, 0, 28, 28, gl.RED, gl.FLOAT, layer1WeightY)
-console.log(
-  `Layer 1 weight y sum: ${layer1WeightY.reduce(
-    (previous, current) => previous + current,
-  )}`,
-)
 
 gl.bindTexture(gl.TEXTURE_2D, layer1WeightFrameBufferInfo.attachments[0])
 gl.generateMipmap(gl.TEXTURE_2D)
@@ -167,6 +159,6 @@ twgl.setBuffersAndAttributes(gl, layer1BiasProgramInfo, bufferInfo)
 twgl.setUniforms(layer1BiasProgramInfo, layer1BiasUniforms)
 twgl.drawBufferInfo(gl, bufferInfo)
 
-const layer1BiasY = new Float32Array(1)
-gl.readPixels(0, 0, 1, 1, gl.RED, gl.FLOAT, layer1BiasY)
-console.log(`Hidden 1: ${layer1BiasY}`)
+const hidden1 = new Float32Array(1)
+gl.readPixels(0, 0, 1, 1, gl.RED, gl.FLOAT, hidden1)
+console.log(`Hidden 1: ${hidden1}`)
