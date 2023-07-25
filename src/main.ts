@@ -38,25 +38,50 @@ const vertexShader = /* glsl */ `#version 300 es
   }
 `
 
-const fragmentShader = /* glsl */ `#version 300 es
+const layer1WeightFragmentShader = /* glsl */ `#version 300 es
 
   precision highp float;
   
   uniform sampler2D xTex;
   uniform sampler2D weightTex;
 
-  out float result;
+  out float y;
 
   void main() {
     ivec2 fragCoord = ivec2(gl_FragCoord);
     ivec2 weightCoord = ivec2(fragCoord.x * fragCoord.y, 0);
     float x = texelFetch(xTex, fragCoord, 0).r;
     float weight = texelFetch(weightTex, weightCoord, 0).r;
-    result = x * weight;
+    y = x * weight;
   }
 `
 
-const programInfo = twgl.createProgramInfo(gl, [vertexShader, fragmentShader])
+const layer1BiasFragmentShader = /* glsl */ `#version 300 es
+
+  precision highp float;
+
+  uniform sampler2D xTex;
+  uniform sampler2D biasTex;
+
+  out float y;
+
+  void main() {
+    ivec2 fragCoord = ivec2(gl_FragCoord);
+    float x = texelFetch(xTex, fragCoord, 4).r * 784.0;
+    float bias = texelFetch(biasTex, fragCoord, 0).r;
+    y = x /* + bias */; // FIXME Wrong result
+  }
+`
+
+const layer1WeightProgramInfo = twgl.createProgramInfo(gl, [
+  vertexShader,
+  layer1WeightFragmentShader,
+])
+
+const layer1BiasProgramInfo = twgl.createProgramInfo(gl, [
+  vertexShader,
+  layer1BiasFragmentShader,
+])
 
 const arrays = {
   inPosition: [-1, -1, 0, 1, -1, 0, -1, 1, 0, -1, 1, 0, 1, -1, 0, 1, 1, 0],
@@ -65,7 +90,8 @@ const bufferInfo = twgl.createBufferInfoFromArrays(gl, arrays)
 
 type Textures = {
   x: WebGLTexture
-  weight: WebGLTexture
+  layer1Weight: WebGLTexture
+  layer1Bias: WebGLTexture
 }
 
 const textures = await new Promise<Textures>((resolve) => {
@@ -73,37 +99,74 @@ const textures = await new Promise<Textures>((resolve) => {
     gl,
     {
       x: { src: 'data/fashion-mnist/0.png' },
-      weight: {
+      layer1Weight: {
         src: layer1Weight,
         internalFormat: gl.R32F,
         width: 784,
         height: 512,
+      },
+      layer1Bias: {
+        src: layer1Bias,
+        internalFormat: gl.R32F,
+        width: 512,
+        height: 1,
       },
     },
     () => resolve(result),
   ) as Textures
 })
 
-const frameBufferInfo = twgl.createFramebufferInfo(
+const layer1WeightFrameBufferInfo = twgl.createFramebufferInfo(
   gl,
   [{ internalFormat: gl.R32F }],
   28,
   28,
 )
 
+const layer1BiasFrameBufferInfo = twgl.createFramebufferInfo(
+  gl,
+  [{ internalFormat: gl.R32F }],
+  1,
+  1,
+)
+
 gl.viewport(0, 0, 28, 28)
 
-const uniforms = {
+const layer1WeightUniforms = {
   xTex: textures.x,
-  weightTex: textures.weight,
+  weightTex: textures.layer1Weight,
 }
 
-gl.bindFramebuffer(gl.FRAMEBUFFER, frameBufferInfo.framebuffer)
-gl.useProgram(programInfo.program)
-twgl.setBuffersAndAttributes(gl, programInfo, bufferInfo)
-twgl.setUniforms(programInfo, uniforms)
+gl.bindFramebuffer(gl.FRAMEBUFFER, layer1WeightFrameBufferInfo.framebuffer)
+gl.useProgram(layer1WeightProgramInfo.program)
+twgl.setBuffersAndAttributes(gl, layer1WeightProgramInfo, bufferInfo)
+twgl.setUniforms(layer1WeightProgramInfo, layer1WeightUniforms)
 twgl.drawBufferInfo(gl, bufferInfo)
 
-const y = new Float32Array(784)
-gl.readPixels(0, 0, 28, 28, gl.RED, gl.FLOAT, y)
-console.log(`y: ${y.join(', ')}`)
+const layer1WeightY = new Float32Array(784)
+gl.readPixels(0, 0, 28, 28, gl.RED, gl.FLOAT, layer1WeightY)
+console.log(
+  `Layer 1 weight y sum: ${layer1WeightY.reduce(
+    (previous, current) => previous + current,
+  )}`,
+)
+
+gl.bindTexture(gl.TEXTURE_2D, layer1WeightFrameBufferInfo.attachments[0])
+gl.generateMipmap(gl.TEXTURE_2D)
+
+gl.viewport(0, 0, 1, 1)
+
+const layer1BiasUniforms = {
+  xTex: layer1WeightFrameBufferInfo.attachments[0],
+  biasTex: textures.layer1Bias,
+}
+
+gl.bindFramebuffer(gl.FRAMEBUFFER, layer1BiasFrameBufferInfo.framebuffer)
+gl.useProgram(layer1BiasProgramInfo.program)
+twgl.setBuffersAndAttributes(gl, layer1BiasProgramInfo, bufferInfo)
+twgl.setUniforms(layer1BiasProgramInfo, layer1BiasUniforms)
+twgl.drawBufferInfo(gl, bufferInfo)
+
+const layer1BiasY = new Float32Array(1)
+gl.readPixels(0, 0, 1, 1, gl.RED, gl.FLOAT, layer1BiasY)
+console.log(`Hidden 1: ${layer1BiasY}`)
