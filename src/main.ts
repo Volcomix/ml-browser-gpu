@@ -8,16 +8,16 @@ const fetchParameter = async (name: string) => {
   return new Float32Array(buffer)
 }
 
-const layer1Weight = await fetchParameter('layer1-weight')
+const layer0Weight = await fetchParameter('layer0-weight')
 console.log(
-  `Layer 1 weight: ${[...layer1Weight.slice(0, 3)]
+  `Layer 0 weight: ${[...layer0Weight.slice(0, 3)]
     .map((value) => value.toFixed(4))
     .join(', ')}, ...`,
 )
 
-const layer1Bias = await fetchParameter('layer1-bias')
+const layer0BiasRaw = await fetchParameter('layer0-bias')
 console.log(
-  `Layer 1 bias: ${[...layer1Bias.slice(0, 3)]
+  `Layer 0 bias: ${[...layer0BiasRaw.slice(0, 3)]
     .map((value) => value.toFixed(7))
     .join(', ')}, ...`,
 )
@@ -38,7 +38,7 @@ const vertexShader = /* glsl */ `#version 300 es
   }
 `
 
-const layer1WeightFragmentShader = /* glsl */ `#version 300 es
+const layer0WeightFragmentShader = /* glsl */ `#version 300 es
 
   precision highp float;
   
@@ -60,7 +60,7 @@ const layer1WeightFragmentShader = /* glsl */ `#version 300 es
   }
 `
 
-const layer1BiasFragmentShader = /* glsl */ `#version 300 es
+const layer0BiasLayer1FragmentShader = /* glsl */ `#version 300 es
 
   precision highp float;
 
@@ -73,18 +73,18 @@ const layer1BiasFragmentShader = /* glsl */ `#version 300 es
     ivec2 fragCoord = ivec2(gl_FragCoord);
     float x = texelFetch(xTex, fragCoord, 5).r * 1024.0;
     float bias = texelFetch(biasTex, fragCoord, 0).r;
-    y = x + bias;
+    y = max(0.0, x + bias); // ReLU
   }
 `
 
-const layer1WeightProgramInfo = twgl.createProgramInfo(gl, [
+const layer0WeightProgramInfo = twgl.createProgramInfo(gl, [
   vertexShader,
-  layer1WeightFragmentShader,
+  layer0WeightFragmentShader,
 ])
 
-const layer1BiasProgramInfo = twgl.createProgramInfo(gl, [
+const layer0BiasLayer1ProgramInfo = twgl.createProgramInfo(gl, [
   vertexShader,
-  layer1BiasFragmentShader,
+  layer0BiasLayer1FragmentShader,
 ])
 
 const arrays = {
@@ -98,14 +98,13 @@ const bufferInfo = twgl.createBufferInfoFromArrays(gl, arrays)
 // 529 = 23 * 23
 // 736 = 32 * 23
 
-// TODO Refactor this rearrangement
-const layer1BiasReshaped = new Float32Array(529)
-layer1BiasReshaped.set(layer1Bias)
+const layer0Bias = new Float32Array(529)
+layer0Bias.set(layer0BiasRaw)
 
 type Textures = {
   x: WebGLTexture
-  layer1Weight: WebGLTexture
-  layer1Bias: WebGLTexture
+  layer0Weight: WebGLTexture
+  layer0Bias: WebGLTexture
 }
 
 const textures = await new Promise<Textures>((resolve) => {
@@ -115,14 +114,14 @@ const textures = await new Promise<Textures>((resolve) => {
       // TODO Consider grouping 4 successive R components into single RGBA pixel
       x: { src: 'data/fashion-mnist/0.png' },
       // TODO Set max mipmap level
-      layer1Weight: {
-        src: layer1Weight,
+      layer0Weight: {
+        src: layer0Weight,
         internalFormat: gl.R32F,
         width: 784,
         height: 512,
       },
-      layer1Bias: {
-        src: layer1BiasReshaped,
+      layer0Bias: {
+        src: layer0Bias,
         internalFormat: gl.R32F,
         width: 23,
         height: 23,
@@ -132,14 +131,14 @@ const textures = await new Promise<Textures>((resolve) => {
   ) as Textures
 })
 
-const layer1WeightFrameBufferInfo = twgl.createFramebufferInfo(
+const layer0WeightFrameBufferInfo = twgl.createFramebufferInfo(
   gl,
   [{ internalFormat: gl.R32F }],
   736,
   736,
 )
 
-const layer1BiasFrameBufferInfo = twgl.createFramebufferInfo(
+const layer0BiasLayer1FrameBufferInfo = twgl.createFramebufferInfo(
   gl,
   [{ internalFormat: gl.R32F }],
   23,
@@ -148,31 +147,31 @@ const layer1BiasFrameBufferInfo = twgl.createFramebufferInfo(
 
 gl.viewport(0, 0, 736, 736)
 
-const layer1WeightUniforms = {
+const layer0WeightUniforms = {
   xTex: textures.x,
-  weightTex: textures.layer1Weight,
+  weightTex: textures.layer0Weight,
 }
 
-gl.bindFramebuffer(gl.FRAMEBUFFER, layer1WeightFrameBufferInfo.framebuffer)
-gl.useProgram(layer1WeightProgramInfo.program)
-twgl.setBuffersAndAttributes(gl, layer1WeightProgramInfo, bufferInfo)
-twgl.setUniforms(layer1WeightProgramInfo, layer1WeightUniforms)
+gl.bindFramebuffer(gl.FRAMEBUFFER, layer0WeightFrameBufferInfo.framebuffer)
+gl.useProgram(layer0WeightProgramInfo.program)
+twgl.setBuffersAndAttributes(gl, layer0WeightProgramInfo, bufferInfo)
+twgl.setUniforms(layer0WeightProgramInfo, layer0WeightUniforms)
 twgl.drawBufferInfo(gl, bufferInfo)
 
-gl.bindTexture(gl.TEXTURE_2D, layer1WeightFrameBufferInfo.attachments[0])
+gl.bindTexture(gl.TEXTURE_2D, layer0WeightFrameBufferInfo.attachments[0])
 gl.generateMipmap(gl.TEXTURE_2D)
 
 gl.viewport(0, 0, 23, 23)
 
-const layer1BiasUniforms = {
-  xTex: layer1WeightFrameBufferInfo.attachments[0],
-  biasTex: textures.layer1Bias,
+const layer0BiasLayer1Uniforms = {
+  xTex: layer0WeightFrameBufferInfo.attachments[0],
+  biasTex: textures.layer0Bias,
 }
 
-gl.bindFramebuffer(gl.FRAMEBUFFER, layer1BiasFrameBufferInfo.framebuffer)
-gl.useProgram(layer1BiasProgramInfo.program)
-twgl.setBuffersAndAttributes(gl, layer1BiasProgramInfo, bufferInfo)
-twgl.setUniforms(layer1BiasProgramInfo, layer1BiasUniforms)
+gl.bindFramebuffer(gl.FRAMEBUFFER, layer0BiasLayer1FrameBufferInfo.framebuffer)
+gl.useProgram(layer0BiasLayer1ProgramInfo.program)
+twgl.setBuffersAndAttributes(gl, layer0BiasLayer1ProgramInfo, bufferInfo)
+twgl.setUniforms(layer0BiasLayer1ProgramInfo, layer0BiasLayer1Uniforms)
 twgl.drawBufferInfo(gl, bufferInfo)
 
 const hidden1 = new Float32Array(512)
