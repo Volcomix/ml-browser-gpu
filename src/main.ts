@@ -177,4 +177,8 @@ twgl.drawBufferInfo(gl, bufferInfo)
 const hidden1 = new Float32Array(512)
 gl.readPixels(0, 0, 23, 22, gl.RED, gl.FLOAT, hidden1)
 gl.readPixels(0, 22, 6, 1, gl.RED, gl.FLOAT, hidden1, 506)
-console.log(`Hidden 1: ${hidden1.join(', ')}`)
+console.log(
+  `Hidden 1: ${hidden1.slice(0, 10).join(', ')}, ... , ${hidden1
+    .slice(-10)
+    .join(', ')}`,
+)
