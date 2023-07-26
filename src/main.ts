@@ -54,7 +54,7 @@ const layer1WeightFragmentShader = /* glsl */ `#version 300 es
       (fragCoord.x % 32) + (fragCoord.y % 32) * 28,
       (fragCoord.x / 32) + (fragCoord.y / 32) * 23
     );
-    float x = texelFetch(xTex, fragCoord, 0).r;
+    float x = texelFetch(xTex, fragCoord % 32, 0).r;
     float weight = texelFetch(weightTex, weightCoord, 0).r;
     y = x * weight;
   }
@@ -73,7 +73,7 @@ const layer1BiasFragmentShader = /* glsl */ `#version 300 es
     ivec2 fragCoord = ivec2(gl_FragCoord);
     float x = texelFetch(xTex, fragCoord, 5).r * 1024.0;
     float bias = texelFetch(biasTex, fragCoord, 0).r;
-    y = x + bias; // TODO Fix result
+    y = x + bias;
   }
 `
 
