@@ -268,6 +268,7 @@ twgl.setBuffersAndAttributes(gl, layer0BiasLayer1ProgramInfo, bufferInfo)
 twgl.setUniforms(layer0BiasLayer1ProgramInfo, layer0BiasLayer1Uniforms)
 twgl.drawBufferInfo(gl, bufferInfo)
 
+// FIXME Error on Firefox
 const hidden1 = new Float32Array(512)
 gl.readPixels(0, 0, 23, 22, gl.RED, gl.FLOAT, hidden1)
 gl.readPixels(0, 22, 6, 1, gl.RED, gl.FLOAT, hidden1, 506)
