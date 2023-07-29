@@ -5,36 +5,17 @@ import './style.css'
 const fetchParameter = async (name: string) => {
   const response = await fetch(`models/fashion-mnist/${name}.gz`)
   const buffer = await response.arrayBuffer()
-  return new Float32Array(buffer)
+  const result = new Float32Array(buffer)
+
+  console.log(`${name}: ${[...result.slice(0, 3)].join(', ')}, ...`)
+
+  return result
 }
 
-const layer0Weight = await fetchParameter('layer0-weight')
-console.log(
-  `Layer 0 weight: ${[...layer0Weight.slice(0, 3)]
-    .map((value) => value.toFixed(4))
-    .join(', ')}, ...`,
-)
-
-const layer0BiasRaw = await fetchParameter('layer0-bias')
-console.log(
-  `Layer 0 bias: ${[...layer0BiasRaw.slice(0, 3)]
-    .map((value) => value.toFixed(7))
-    .join(', ')}, ...`,
-)
-
-const layer2Weight = await fetchParameter('layer2-weight')
-console.log(
-  `Layer 2 weight: ${[...layer2Weight.slice(0, 3)]
-    .map((value) => value.toFixed(4))
-    .join(', ')}, ...`,
-)
-
-const layer2BiasRaw = await fetchParameter('layer2-bias')
-console.log(
-  `Layer 2 bias: ${[...layer2BiasRaw.slice(0, 3)]
-    .map((value) => value.toFixed(7))
-    .join(', ')}, ...`,
-)
+const weight0 = await fetchParameter('0-weight')
+const bias0Raw = await fetchParameter('0-bias')
+const weight2 = await fetchParameter('2-weight')
+const biasRaw2 = await fetchParameter('2-bias')
 
 const canvas = new OffscreenCanvas(1, 1)
 const gl = canvas.getContext('webgl2')
@@ -162,10 +143,10 @@ const bufferInfo = twgl.createBufferInfoFromArrays(gl, arrays)
 // 736 = 32 * 23
 
 const layer0Bias = new Float32Array(529)
-layer0Bias.set(layer0BiasRaw)
+layer0Bias.set(bias0Raw)
 
 const layer2Bias = new Float32Array(529)
-layer2Bias.set(layer2BiasRaw)
+layer2Bias.set(biasRaw2)
 
 type Textures = {
   x: WebGLTexture
@@ -183,7 +164,7 @@ const textures = await new Promise<Textures>((resolve) => {
       x: { src: 'data/fashion-mnist/0.png' },
       // TODO Set max mipmap level
       layer0Weight: {
-        src: layer0Weight,
+        src: weight0,
         internalFormat: gl.R32F,
         width: 784,
         height: 512,
@@ -195,7 +176,7 @@ const textures = await new Promise<Textures>((resolve) => {
         height: 23,
       },
       layer2Weight: {
-        src: layer2Weight,
+        src: weight2,
         internalFormat: gl.R32F,
         width: 512,
         height: 512,
