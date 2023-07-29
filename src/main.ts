@@ -45,19 +45,30 @@ const process = (
   twgl.drawBufferInfo(gl, bufferInfo)
 }
 
-const loadWeight0 = async () => {
+type Size = {
+  width: number
+  height: number
+}
+
+type WeightSize = {
+  source: Size
+  destination: Size
+  tile: Size
+  viewport?: Size
+}
+
+const loadWeight = async (parameterIndex: number, size: WeightSize) => {
   const tex = twgl.createTexture(gl, {
-    src: await fetchParameter('0-weight'),
+    src: await fetchParameter(`${parameterIndex}-weight`),
     internalFormat: gl.R32F,
-    width: 784,
-    height: 512,
+    ...size.source,
   })
 
   const fbi = twgl.createFramebufferInfo(
     gl,
     [{ internalFormat: gl.RGBA32F }],
-    32,
-    4096,
+    size.destination.width,
+    size.destination.height,
   )
 
   const fragmentShader = /* glsl */ `#version 300 es
@@ -70,8 +81,8 @@ const loadWeight0 = async () => {
   
     void main() {
       ivec2 fragCoord = ivec2(gl_FragCoord);
-      int x = fragCoord.x + (fragCoord.y % 32) * 28;
-      int y  = 4 * (fragCoord.y / 32);
+      int x = fragCoord.x + (fragCoord.y % ${size.tile.height}) * ${size.tile.width};
+      int y  = 4 * (fragCoord.y / ${size.tile.height});
       result = vec4(
         texelFetch(tex, ivec2(x, y), 0).r,
         texelFetch(tex, ivec2(x, y + 1), 0).r,
@@ -82,7 +93,10 @@ const loadWeight0 = async () => {
   `
 
   const programInfo = twgl.createProgramInfo(gl, [vertexShader, fragmentShader])
-  gl.viewport(0, 0, 28, 4092)
+
+  const viewport = size.viewport ?? size.destination
+  gl.viewport(0, 0, viewport.width, viewport.height)
+
   process(programInfo, fbi, { tex })
 
   gl.deleteTexture(tex)
@@ -92,70 +106,49 @@ const loadWeight0 = async () => {
   return fbi.attachments[0] as WebGLTexture
 }
 
-const loadBias0 = async () => {
+const loadBias = async (parameterIndex: number, size: number) => {
+  let data = await fetchParameter(`${parameterIndex}-bias`)
+
+  if (size * 4 !== data.length) {
+    const newData = new Float32Array(size * 4)
+    newData.set(data)
+    data = newData
+  }
+
   return twgl.createTexture(gl, {
-    src: await fetchParameter('0-bias'),
+    src: data,
     internalFormat: gl.RGBA32F,
     width: 1,
-    height: 128,
+    height: size,
   })
 }
 
-const loadWeight2 = async () => {
-  const tex = twgl.createTexture(gl, {
-    src: await fetchParameter('2-weight'),
-    internalFormat: gl.R32F,
-    width: 512, // <- CHANGED
-    height: 512,
-  })
+const [weight0, bias0, weight2, bias2, weight4, bias4] = await Promise.all([
+  loadWeight(0, {
+    source: { width: 784, height: 512 },
+    destination: { width: 32, height: 4096 },
+    tile: { width: 28, height: 32 },
+    viewport: { width: 28, height: 4092 },
+  }),
+  loadBias(0, 128),
 
-  const fbi = twgl.createFramebufferInfo(
-    gl,
-    [{ internalFormat: gl.RGBA32F }],
-    32,
-    2048, // <- CHANGED
-  )
+  loadWeight(2, {
+    source: { width: 512, height: 512 },
+    destination: { width: 32, height: 2048 },
+    tile: { width: 32, height: 16 },
+  }),
+  loadBias(2, 128),
 
-  const fragmentShader = /* glsl */ `#version 300 es
-  
-    precision highp float;
-  
-    uniform sampler2D tex;
-  
-    out vec4 result;
-  
-    void main() {
-      ivec2 fragCoord = ivec2(gl_FragCoord);
-      // CHANGED                           vv    vv
-      int x = fragCoord.x + (fragCoord.y % 16) * 32;
-      // CHANGED                  vv
-      int y  = 4 * (fragCoord.y / 16);
-      result = vec4(
-        texelFetch(tex, ivec2(x, y), 0).r,
-        texelFetch(tex, ivec2(x, y + 1), 0).r,
-        texelFetch(tex, ivec2(x, y + 2), 0).r,
-        texelFetch(tex, ivec2(x, y + 3), 0).r
-      );
-    }
-  `
+  loadWeight(4, {
+    source: { width: 512, height: 10 },
+    destination: { width: 32, height: 64 },
+    tile: { width: 32, height: 16 },
+    viewport: { width: 32, height: 48 },
+  }),
+  loadBias(4, 4),
+])
 
-  const programInfo = twgl.createProgramInfo(gl, [vertexShader, fragmentShader])
-  // CHANGED        vv   vv
-  gl.viewport(0, 0, 32, 2048)
-  process(programInfo, fbi, { tex })
-
-  gl.deleteTexture(tex)
-  gl.deleteFramebuffer(fbi.framebuffer)
-  gl.deleteProgram(programInfo.program)
-
-  return fbi.attachments[0] as WebGLTexture
-}
-
-const weight0 = await loadWeight0()
-const bias0 = await loadBias0()
-const weight2 = await loadWeight2()
-
-console.log({ weight0, bias0, weight2 })
+console.log({ weight0, bias0, weight2, bias2, weight4, bias4 })
 
 if (Number(1)) {
   throw new Error('Implementation not finished')
