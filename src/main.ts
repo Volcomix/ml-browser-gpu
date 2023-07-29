@@ -71,7 +71,7 @@ const loadWeight0 = async () => {
     void main() {
       ivec2 fragCoord = ivec2(gl_FragCoord);
       int x = fragCoord.x + (fragCoord.y % 32) * 28;
-      int y  = 4 * fragCoord.y / 32;
+      int y  = 4 * (fragCoord.y / 32);
       result = vec4(
         texelFetch(tex, ivec2(x, y), 0).r,
         texelFetch(tex, ivec2(x, y + 1), 0).r,
@@ -82,7 +82,7 @@ const loadWeight0 = async () => {
   `
 
   const programInfo = twgl.createProgramInfo(gl, [vertexShader, fragmentShader])
-  gl.viewport(0, 0, 28, 4096)
+  gl.viewport(0, 0, 28, 4092)
   process(programInfo, fbi, { tex })
 
   gl.deleteTexture(tex)
@@ -101,10 +101,61 @@ const loadBias0 = async () => {
   })
 }
 
+const loadWeight2 = async () => {
+  const tex = twgl.createTexture(gl, {
+    src: await fetchParameter('2-weight'),
+    internalFormat: gl.R32F,
+    width: 512, // <- CHANGED
+    height: 512,
+  })
+
+  const fbi = twgl.createFramebufferInfo(
+    gl,
+    [{ internalFormat: gl.RGBA32F }],
+    32,
+    2048, // <- CHANGED
+  )
+
+  const fragmentShader = /* glsl */ `#version 300 es
+  
+    precision highp float;
+  
+    uniform sampler2D tex;
+  
+    out vec4 result;
+  
+    void main() {
+      ivec2 fragCoord = ivec2(gl_FragCoord);
+      // CHANGED                           vv    vv
+      int x = fragCoord.x + (fragCoord.y % 16) * 32;
+      // CHANGED                  vv
+      int y  = 4 * (fragCoord.y / 16);
+      result = vec4(
+        texelFetch(tex, ivec2(x, y), 0).r,
+        texelFetch(tex, ivec2(x, y + 1), 0).r,
+        texelFetch(tex, ivec2(x, y + 2), 0).r,
+        texelFetch(tex, ivec2(x, y + 3), 0).r
+      );
+    }
+  `
+
+  const programInfo = twgl.createProgramInfo(gl, [vertexShader, fragmentShader])
+  // CHANGED        vv   vv
+  gl.viewport(0, 0, 32, 2048)
+  process(programInfo, fbi, { tex })
+
+  gl.deleteTexture(tex)
+  gl.deleteFramebuffer(fbi.framebuffer)
+  gl.deleteProgram(programInfo.program)
+
+  return fbi.attachments[0] as WebGLTexture
+}
+
 const weight0 = await loadWeight0()
 const bias0 = await loadBias0()
+const weight2 = await loadWeight2()
 
-console.log({ weight0, bias0 })
+console.log({ weight0, bias0, weight2 })
 
 if (Number(1)) {
   throw new Error('Implementation not finished')
