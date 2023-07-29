@@ -12,17 +12,17 @@ const fetchParameter = async (name: string) => {
   return result
 }
 
-const weight0 = await fetchParameter('0-weight')
-const bias0Raw = await fetchParameter('0-bias')
-const weight2 = await fetchParameter('2-weight')
-const biasRaw2 = await fetchParameter('2-bias')
-
 const canvas = new OffscreenCanvas(1, 1)
 const gl = canvas.getContext('webgl2')
 if (!gl) {
   throw new Error('WebGL 2 is not available')
 }
 twgl.addExtensionsToContext(gl)
+
+const bufferInfo = twgl.createBufferInfoFromArrays(gl, {
+  // TODO Check if possible optimizations by changing the faces
+  inPosition: [-1, -1, 0, 1, -1, 0, -1, 1, 0, -1, 1, 0, 1, -1, 0, 1, 1, 0],
+})
 
 const vertexShader = /* glsl */ `#version 300 es
      
@@ -32,6 +32,83 @@ const vertexShader = /* glsl */ `#version 300 es
     gl_Position = vec4(inPosition, 0, 1);
   }
 `
+
+const process = (
+  programInfo: twgl.ProgramInfo,
+  frameBufferInfo: twgl.FramebufferInfo,
+  uniforms: Record<string, unknown>,
+) => {
+  gl.bindFramebuffer(gl.FRAMEBUFFER, frameBufferInfo.framebuffer)
+  gl.useProgram(programInfo.program)
+  twgl.setBuffersAndAttributes(gl, programInfo, bufferInfo)
+  twgl.setUniforms(programInfo, uniforms)
+  twgl.drawBufferInfo(gl, bufferInfo)
+}
+
+const loadWeight0 = async () => {
+  const tex = twgl.createTexture(gl, {
+    src: await fetchParameter('0-weight'),
+    internalFormat: gl.R32F,
+    width: 784,
+    height: 512,
+  })
+
+  const fbi = twgl.createFramebufferInfo(
+    gl,
+    [{ internalFormat: gl.RGBA32F }],
+    32,
+    4096,
+  )
+
+  const fragmentShader = /* glsl */ `#version 300 es
+  
+    precision highp float;
+  
+    uniform sampler2D tex;
+  
+    out vec4 result;
+  
+    void main() {
+      ivec2 fragCoord = ivec2(gl_FragCoord);
+      int x = fragCoord.x + (fragCoord.y % 32) * 28;
+      int y  = 4 * fragCoord.y / 32;
+      result = vec4(
+        texelFetch(tex, ivec2(x, y), 0).r,
+        texelFetch(tex, ivec2(x, y + 1), 0).r,
+        texelFetch(tex, ivec2(x, y + 2), 0).r,
+        texelFetch(tex, ivec2(x, y + 3), 0).r
+      );
+    }
+  `
+
+  const programInfo = twgl.createProgramInfo(gl, [vertexShader, fragmentShader])
+  gl.viewport(0, 0, 28, 4096)
+  process(programInfo, fbi, { tex })
+
+  gl.deleteTexture(tex)
+  gl.deleteFramebuffer(fbi.framebuffer)
+  gl.deleteProgram(programInfo.program)
+
+  return fbi.attachments[0] as WebGLTexture
+}
+
+const loadBias0 = async () => {
+  return twgl.createTexture(gl, {
+    src: await fetchParameter('0-bias'),
+    internalFormat: gl.RGBA32F,
+    width: 1,
+    height: 128,
+  })
+}
+
+const weight0 = await loadWeight0()
+const bias0 = await loadBias0()
+
+console.log({ weight0, bias0 })
+
+if (Number(1)) {
+  throw new Error('Implementation not finished')
+}
 
 const layer0WeightFragmentShader = /* glsl */ `#version 300 es
 
@@ -130,12 +207,6 @@ const layer2BiasLayer3ProgramInfo = twgl.createProgramInfo(gl, [
   vertexShader,
   layer2BiasLayer3FragmentShader,
 ])
-
-const arrays = {
-  // TODO Put faces only on pixels where we want to compute something
-  inPosition: [-1, -1, 0, 1, -1, 0, -1, 1, 0, -1, 1, 0, 1, -1, 0, 1, 1, 0],
-}
-const bufferInfo = twgl.createBufferInfoFromArrays(gl, arrays)
 
 // 32 = lowest power of 2 that is greater than or equal to 28
 // 23 = ceil(sqrt(512))
