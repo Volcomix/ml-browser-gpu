@@ -327,13 +327,13 @@ const [weight0, bias0, weight2, bias2, weight4, bias4, input] =
     loadInput(),
   ])
 
-const fbi = createFramebufferInfos()
-
 const multiply0 = setupMultiply({ source: [32, 32], tile: [32, 32] }, 'R')
 const multiply2_4 = setupMultiply({ source: [1, 128], tile: [32, 16] })
 const sum1DReLU = setupSum1D(1024, 5, ReLU)
 const sum2DReLU = setupSum2D(512, 2, 4, ReLU)
 const sum2D = setupSum2D(512, 2, 4)
+
+const fbi = createFramebufferInfos()
 
 const predict = () => {
   multiply0(input, weight0, fbi['32x4096'], 32, 4096)
