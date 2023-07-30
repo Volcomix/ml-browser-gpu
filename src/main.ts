@@ -175,41 +175,7 @@ const createFramebufferInfos = (): FramebufferInfos => {
   }
 }
 
-const setupMultiply1D = (tileSize: number) => {
-  const fragmentShader = /* glsl */ `#version 300 es
-
-    precision highp float;
-
-    uniform sampler2D xTex;
-    uniform sampler2D wTex;
-
-    out vec4 y;
-
-    void main() {
-      ivec2 fragCoord = ivec2(gl_FragCoord);
-      ivec2 xCoord = ivec2(fragCoord.x, fragCoord.y % ${tileSize});
-      float x = texelFetch(xTex, xCoord, 0).r;
-      vec4 w = texelFetch(wTex, fragCoord, 0);
-      y = x * w;
-    }
-  `
-
-  const programInfo = twgl.createProgramInfo(gl, [vertexShader, fragmentShader])
-
-  const multiply1D = (
-    xTex: WebGLTexture,
-    wTex: WebGLTexture,
-    fbi: FramebufferInfo,
-    viewportWidth: number,
-    viewportHeight: number,
-  ) => {
-    process(programInfo, fbi, { xTex, wTex }, viewportWidth, viewportHeight)
-  }
-
-  return multiply1D
-}
-
-const setupMultiply2D = (tileWidth: number, tileHeight: number) => {
+const setupMultiply1D = (tileWidth: number, tileHeight: number) => {
   const fragmentShader = /* glsl */ `#version 300 es
 
     precision highp float;
@@ -230,6 +196,40 @@ const setupMultiply2D = (tileWidth: number, tileHeight: number) => {
 
   const programInfo = twgl.createProgramInfo(gl, [vertexShader, fragmentShader])
 
+  const multiply1D = (
+    xTex: WebGLTexture,
+    wTex: WebGLTexture,
+    fbi: FramebufferInfo,
+    viewportWidth: number,
+    viewportHeight: number,
+  ) => {
+    process(programInfo, fbi, { xTex, wTex }, viewportWidth, viewportHeight)
+  }
+
+  return multiply1D
+}
+
+const setupMultiply2D = (tileHeight: number) => {
+  const fragmentShader = /* glsl */ `#version 300 es
+
+    precision highp float;
+
+    uniform sampler2D xTex;
+    uniform sampler2D wTex;
+
+    out vec4 y;
+
+    void main() {
+      ivec2 fragCoord = ivec2(gl_FragCoord);
+      ivec2 xCoord = ivec2(fragCoord.x, fragCoord.y % ${tileHeight});
+      float x = texelFetch(xTex, xCoord, 0).r;
+      vec4 w = texelFetch(wTex, fragCoord, 0);
+      y = x * w;
+    }
+  `
+
+  const programInfo = twgl.createProgramInfo(gl, [vertexShader, fragmentShader])
+
   const multiply2D = (
     xTex: WebGLTexture,
     wTex: WebGLTexture,
@@ -243,7 +243,7 @@ const setupMultiply2D = (tileWidth: number, tileHeight: number) => {
   return multiply2D
 }
 
-const setupSum = () => {
+const setupSum1DReLU = (tileSize: number, lod: number) => {
   const fragmentShader = /* glsl */ `#version 300 es
 
     precision highp float;
@@ -255,7 +255,7 @@ const setupSum = () => {
 
     void main() {
       ivec2 fragCoord = ivec2(gl_FragCoord);
-      vec4 x = texelFetch(xTex, fragCoord, 5) * 1024.0;
+      vec4 x = texelFetch(xTex, fragCoord, ${lod}) * ${tileSize}.0;
       vec4 b = texelFetch(bTex, fragCoord, 0);
       y = max(vec4(0), x + b); // ReLU
     }
@@ -263,7 +263,7 @@ const setupSum = () => {
 
   const programInfo = twgl.createProgramInfo(gl, [vertexShader, fragmentShader])
 
-  const sum = (
+  const sum1DReLU = (
     xTex: WebGLTexture,
     bTex: WebGLTexture,
     fbi: FramebufferInfo,
@@ -276,7 +276,47 @@ const setupSum = () => {
     process(programInfo, fbi, { xTex, bTex }, viewportWidth, viewportHeight)
   }
 
-  return sum
+  return sum1DReLU
+}
+
+// TODO Improve contract
+const setupSum2DReLU = (tileSize: number, tileCount: number, lod: number) => {
+  const fragmentShader = /* glsl */ `#version 300 es
+
+    precision highp float;
+
+    uniform sampler2D xTex;
+    uniform sampler2D bTex;
+
+    out vec4 y;
+
+    void main() {
+      ivec2 fragCoord = ivec2(gl_FragCoord);
+      vec4 x = (${Array.from(
+        { length: tileCount },
+        (_v, k) => `texelFetch(xTex, ivec2(${k}, fragCoord.y), ${lod})`,
+      ).join(' + ')}) * ${tileSize / tileCount}.0;
+      vec4 b = texelFetch(bTex, fragCoord, 0);
+      y = max(vec4(0), x + b); // ReLU
+    }
+  `
+
+  const programInfo = twgl.createProgramInfo(gl, [vertexShader, fragmentShader])
+
+  const sum2DReLU = (
+    xTex: WebGLTexture,
+    bTex: WebGLTexture,
+    fbi: FramebufferInfo,
+    viewportWidth: number,
+    viewportHeight: number,
+  ) => {
+    gl.bindTexture(gl.TEXTURE_2D, xTex)
+    // TODO Set the right TEXTURE_BASE_LEVEL and TEXTURE_MAX_LEVEL before calling generateMipmap
+    gl.generateMipmap(gl.TEXTURE_2D)
+    process(programInfo, fbi, { xTex, bTex }, viewportWidth, viewportHeight)
+  }
+
+  return sum2DReLU
 }
 
 // TODO Remove linter ignore
@@ -311,13 +351,15 @@ const [weight0, bias0, weight2, bias2, weight4, bias4, input] =
 
 const fbi = createFramebufferInfos()
 
-const multiply1D = setupMultiply1D(32)
-const multiply2D = setupMultiply2D(32, 16)
-const sum = setupSum()
+const multiply2D = setupMultiply2D(32)
+const multiply1D = setupMultiply1D(32, 16)
+const sum1DReLU = setupSum1DReLU(1024, 5)
+const sum2DReLU = setupSum2DReLU(512, 2, 4)
 
-multiply1D(input, weight0, fbi['32x4096'], 28, 4092)
-sum(fbi['32x4096'].attachment, bias0, fbi['1x128'], 1, 128)
-multiply2D(fbi['1x128'].attachment, weight2, fbi['32x4096'], 32, 2048)
+multiply2D(input, weight0, fbi['32x4096'], 28, 4092)
+sum1DReLU(fbi['32x4096'].attachment, bias0, fbi['1x128'], 1, 128)
+multiply1D(fbi['1x128'].attachment, weight2, fbi['32x4096'], 32, 2048)
+sum2DReLU(fbi['32x4096'].attachment, bias2, fbi['1x128'], 1, 128)
 
 if (Number(1)) {
   throw new Error('Implementation not finished')
