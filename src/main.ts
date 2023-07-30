@@ -2,16 +2,6 @@ import * as twgl from 'twgl.js'
 
 import './style.css'
 
-const fetchParameter = async (name: string) => {
-  const response = await fetch(`models/fashion-mnist/${name}.gz`)
-  const buffer = await response.arrayBuffer()
-  const result = new Float32Array(buffer)
-
-  console.log(`${name}: ${[...result.slice(0, 3)].join(', ')}, ...`)
-
-  return result
-}
-
 const canvas = new OffscreenCanvas(1, 1)
 const gl = canvas.getContext('webgl2')
 if (!gl) {
@@ -35,20 +25,27 @@ const vertexShader = /* glsl */ `#version 300 es
 
 const process = (
   programInfo: twgl.ProgramInfo,
-  frameBufferInfo: twgl.FramebufferInfo,
+  fbi: twgl.FramebufferInfo,
   uniforms: Record<string, unknown>,
 ) => {
-  gl.bindFramebuffer(gl.FRAMEBUFFER, frameBufferInfo.framebuffer)
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fbi.framebuffer)
   gl.useProgram(programInfo.program)
   twgl.setBuffersAndAttributes(gl, programInfo, bufferInfo)
   twgl.setUniforms(programInfo, uniforms)
   twgl.drawBufferInfo(gl, bufferInfo)
 }
 
-type Size = {
-  width: number
-  height: number
+const fetchParameter = async (name: string) => {
+  const response = await fetch(`models/fashion-mnist/${name}.gz`)
+  const buffer = await response.arrayBuffer()
+  const result = new Float32Array(buffer)
+
+  console.log(`${name}: ${[...result.slice(0, 3)].join(', ')}, ...`)
+
+  return result
 }
+
+type Size = [number, number]
 
 type WeightSize = {
   source: Size
@@ -57,18 +54,19 @@ type WeightSize = {
   viewport?: Size
 }
 
-const loadWeight = async (parameterIndex: number, size: WeightSize) => {
+const loadWeight = async (parameterName: string, size: WeightSize) => {
   const tex = twgl.createTexture(gl, {
-    src: await fetchParameter(`${parameterIndex}-weight`),
+    src: await fetchParameter(parameterName),
     internalFormat: gl.R32F,
-    ...size.source,
+    width: size.source[0],
+    height: size.source[1],
   })
 
   const fbi = twgl.createFramebufferInfo(
     gl,
     [{ internalFormat: gl.RGBA32F }],
-    size.destination.width,
-    size.destination.height,
+    size.destination[0],
+    size.destination[1],
   )
 
   const fragmentShader = /* glsl */ `#version 300 es
@@ -81,8 +79,8 @@ const loadWeight = async (parameterIndex: number, size: WeightSize) => {
   
     void main() {
       ivec2 fragCoord = ivec2(gl_FragCoord);
-      int x = fragCoord.x + (fragCoord.y % ${size.tile.height}) * ${size.tile.width};
-      int y  = 4 * (fragCoord.y / ${size.tile.height});
+      int x = fragCoord.x + (fragCoord.y % ${size.tile[1]}) * ${size.tile[0]};
+      int y  = 4 * (fragCoord.y / ${size.tile[1]});
       result = vec4(
         texelFetch(tex, ivec2(x, y), 0).r,
         texelFetch(tex, ivec2(x, y + 1), 0).r,
@@ -95,7 +93,7 @@ const loadWeight = async (parameterIndex: number, size: WeightSize) => {
   const programInfo = twgl.createProgramInfo(gl, [vertexShader, fragmentShader])
 
   const viewport = size.viewport ?? size.destination
-  gl.viewport(0, 0, viewport.width, viewport.height)
+  gl.viewport(0, 0, viewport[0], viewport[1])
 
   process(programInfo, fbi, { tex })
 
@@ -106,8 +104,8 @@ const loadWeight = async (parameterIndex: number, size: WeightSize) => {
   return fbi.attachments[0] as WebGLTexture
 }
 
-const loadBias = async (parameterIndex: number, size: number) => {
-  let data = await fetchParameter(`${parameterIndex}-bias`)
+const loadBias = async (parameterName: string, size: number) => {
+  let data = await fetchParameter(parameterName)
 
   if (size * 4 !== data.length) {
     const newData = new Float32Array(size * 4)
@@ -123,32 +121,109 @@ const loadBias = async (parameterIndex: number, size: number) => {
   })
 }
 
-const [weight0, bias0, weight2, bias2, weight4, bias4] = await Promise.all([
-  loadWeight(0, {
-    source: { width: 784, height: 512 },
-    destination: { width: 32, height: 4096 },
-    tile: { width: 28, height: 32 },
-    viewport: { width: 28, height: 4092 },
-  }),
-  loadBias(0, 128),
+const loadInput = () => {
+  return new Promise<WebGLTexture>((resolve, reject) =>
+    twgl.createTexture(
+      gl,
+      { src: 'data/fashion-mnist/0.png' },
+      (err, texture) => {
+        if (err) {
+          reject(err)
+        } else {
+          resolve(texture)
+        }
+      },
+    ),
+  )
+}
 
-  loadWeight(2, {
-    source: { width: 512, height: 512 },
-    destination: { width: 32, height: 2048 },
-    tile: { width: 32, height: 16 },
-  }),
-  loadBias(2, 128),
+const createFrameBufferInfos = () => {
+  return {
+    '32x4096': twgl.createFramebufferInfo(
+      gl,
+      [{ internalFormat: gl.RGBA32F }],
+      32,
+      4096,
+    ),
+    '1x128': twgl.createFramebufferInfo(
+      gl,
+      [{ internalFormat: gl.RGBA32F }],
+      1,
+      128,
+    ),
+  }
+}
 
-  loadWeight(4, {
-    source: { width: 512, height: 10 },
-    destination: { width: 32, height: 64 },
-    tile: { width: 32, height: 16 },
-    viewport: { width: 32, height: 48 },
-  }),
-  loadBias(4, 4),
-])
+const setupMultiply = () => {
+  const fragmentShader = /* glsl */ `#version 300 es
 
-console.log({ weight0, bias0, weight2, bias2, weight4, bias4 })
+    precision highp float;
+
+    uniform sampler2D xTex;
+    uniform sampler2D wTex;
+
+    out vec4 y;
+
+    void main() {
+      ivec2 fragCoord = ivec2(gl_FragCoord);
+      ivec2 xCoord = ivec2(fragCoord.x, fragCoord.y % 32);
+      float x = texelFetch(xTex, xCoord, 0).r;
+      vec4 w = texelFetch(wTex, fragCoord, 0);
+      y = x * w;
+    }
+  `
+
+  const programInfo = twgl.createProgramInfo(gl, [vertexShader, fragmentShader])
+
+  const multiply = (
+    xTex: WebGLTexture,
+    wTex: WebGLTexture,
+    fbi: twgl.FramebufferInfo,
+    viewportWidth: number,
+    viewportHeight: number,
+  ) => {
+    gl.viewport(0, 0, viewportWidth, viewportHeight)
+    process(programInfo, fbi, { xTex, wTex })
+  }
+
+  return multiply
+}
+
+// TODO Remove linter ignore
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const [weight0, bias0, weight2, bias2, weight4, bias4, input] =
+  await Promise.all([
+    loadWeight('0-weight', {
+      source: [784, 512],
+      destination: [32, 4096],
+      tile: [28, 32],
+      viewport: [28, 4092],
+    }),
+    loadBias('0-bias', 128),
+
+    loadWeight('2-weight', {
+      source: [512, 512],
+      destination: [32, 2048],
+      tile: [32, 16],
+    }),
+    loadBias('2-bias', 128),
+
+    loadWeight('4-weight', {
+      source: [512, 10],
+      destination: [32, 64],
+      tile: [32, 16],
+      viewport: [32, 48],
+    }),
+    loadBias('4-bias', 4),
+
+    loadInput(),
+  ])
+
+const fbi = createFrameBufferInfos()
+
+const multiply = setupMultiply()
+
+multiply(input, weight0, fbi['32x4096'], 28, 4092)
 
 if (Number(1)) {
   throw new Error('Implementation not finished')
