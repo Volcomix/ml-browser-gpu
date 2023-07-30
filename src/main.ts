@@ -27,7 +27,6 @@ type FramebufferInfo = Omit<twgl.FramebufferInfo, 'attachments'> & {
 }
 
 const createFramebufferInfo = (
-  gl: WebGLRenderingContext,
   attachment: twgl.AttachmentOptions,
   width: number,
   height: number,
@@ -81,7 +80,6 @@ const loadWeight = async (parameterName: string, size: WeightSize) => {
   })
 
   const fbi = createFramebufferInfo(
-    gl,
     { internalFormat: gl.RGBA32F },
     size.destination[0],
     size.destination[1],
@@ -153,27 +151,15 @@ const loadInput = () => {
   )
 }
 
-type FramebufferInfos = {
-  '32x4096': FramebufferInfo
-  '1x128': FramebufferInfo
-}
-
-const createFramebufferInfos = (): FramebufferInfos => {
-  return {
-    '32x4096': createFramebufferInfo(
-      gl,
-      { internalFormat: gl.RGBA32F },
-      32,
-      4096,
-    ),
-    '1x128': createFramebufferInfo(gl, { internalFormat: gl.RGBA32F }, 1, 128),
-  }
-}
+const createFramebufferInfos = () => ({
+  '32x4096': createFramebufferInfo({ internalFormat: gl.RGBA32F }, 32, 4096),
+  '1x128': createFramebufferInfo({ internalFormat: gl.RGBA32F }, 1, 128),
+})
 
 type Activation = (x: string) => string
 
-const Identity = (x: string) => x
-const ReLU = (x: string) => `max(vec4(0), ${x})`
+const Identity: Activation = (x: string) => x
+const ReLU: Activation = (x: string) => `max(vec4(0), ${x})`
 
 const setupMultiply1D = (tileWidth: number, tileHeight: number) => {
   const fragmentShader = /* glsl */ `#version 300 es
@@ -328,19 +314,6 @@ const setupSum2D = (
   return sum2D
 }
 
-const argmax = (x: Float32Array) => {
-  return [...x].reduce(
-    (acc, value, index) => (value > acc.max ? { max: value, index } : acc),
-    { max: -Infinity, index: -1 },
-  ).index
-}
-
-const format = (data: Float32Array, maximumFractionDigits: number) => {
-  return [...data]
-    .map((value) => value.toLocaleString('en-US', { maximumFractionDigits }))
-    .join(', ')
-}
-
 const [weight0, bias0, weight2, bias2, weight4, bias4, input] =
   await Promise.all([
     loadWeight('0-weight', {
@@ -377,6 +350,28 @@ const sum1DReLU = setupSum1D(1024, 5, ReLU)
 const sum2DReLU = setupSum2D(512, 2, 4, ReLU)
 const sum2D = setupSum2D(512, 2, 4)
 
+const predict = () => {
+  multiply2D(input, weight0, fbi['32x4096'], 32, 4096)
+  sum1DReLU(fbi['32x4096'].attachment, bias0, fbi['1x128'], 1, 128)
+  multiply1D(fbi['1x128'].attachment, weight2, fbi['32x4096'], 32, 2048)
+  sum2DReLU(fbi['32x4096'].attachment, bias2, fbi['1x128'], 1, 128)
+  multiply1D(fbi['1x128'].attachment, weight4, fbi['32x4096'], 32, 48)
+  sum2D(fbi['32x4096'].attachment, bias4, fbi['1x128'], 1, 3)
+}
+
+const argmax = (x: Float32Array) => {
+  return [...x].reduce(
+    (acc, value, index) => (value > acc.max ? { max: value, index } : acc),
+    { max: -Infinity, index: -1 },
+  ).index
+}
+
+const format = (data: Float32Array, maximumFractionDigits: number) => {
+  return [...data]
+    .map((value) => value.toLocaleString('en-US', { maximumFractionDigits }))
+    .join(', ')
+}
+
 const outputData = new Float32Array(12)
 const output = outputData.subarray(0, 10)
 
@@ -395,16 +390,11 @@ const classes = [
 
 const separator = '-'.repeat(100)
 
-const predict = () => {
+for (let i = 0; i < 5; i++) {
+  console.log(separator)
+
   const start = performance.now()
-
-  multiply2D(input, weight0, fbi['32x4096'], 32, 4096)
-  sum1DReLU(fbi['32x4096'].attachment, bias0, fbi['1x128'], 1, 128)
-  multiply1D(fbi['1x128'].attachment, weight2, fbi['32x4096'], 32, 2048)
-  sum2DReLU(fbi['32x4096'].attachment, bias2, fbi['1x128'], 1, 128)
-  multiply1D(fbi['1x128'].attachment, weight4, fbi['32x4096'], 32, 48)
-  sum2D(fbi['32x4096'].attachment, bias4, fbi['1x128'], 1, 3)
-
+  predict()
   const gpuTime = performance.now() - start
 
   gl.readPixels(0, 0, 1, 3, gl.RGBA, gl.FLOAT, outputData)
@@ -416,10 +406,5 @@ const predict = () => {
   console.log(`Predicted: ${predicted}`)
   console.log(`GPU time: ${gpuTime}ms`)
   console.log(`Total time: ${totalTime}ms`)
-}
-
-for (let i = 0; i < 5; i++) {
-  console.log(separator)
-  predict()
 }
 console.log(separator)
