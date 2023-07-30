@@ -377,6 +377,9 @@ const sum1DReLU = setupSum1D(1024, 5, ReLU)
 const sum2DReLU = setupSum2D(512, 2, 4, ReLU)
 const sum2D = setupSum2D(512, 2, 4)
 
+const outputData = new Float32Array(12)
+const output = outputData.subarray(0, 10)
+
 const classes = [
   'T-shirt/top',
   'Trouser',
@@ -390,25 +393,33 @@ const classes = [
   'Ankle boot',
 ]
 
-const start = performance.now()
+const separator = '-'.repeat(100)
 
-multiply2D(input, weight0, fbi['32x4096'], 28, 4092)
-sum1DReLU(fbi['32x4096'].attachment, bias0, fbi['1x128'], 1, 128)
-multiply1D(fbi['1x128'].attachment, weight2, fbi['32x4096'], 32, 2048)
-sum2DReLU(fbi['32x4096'].attachment, bias2, fbi['1x128'], 1, 128)
-multiply1D(fbi['1x128'].attachment, weight4, fbi['32x4096'], 32, 48)
-sum2D(fbi['32x4096'].attachment, bias4, fbi['1x128'], 1, 3)
+const predict = () => {
+  const start = performance.now()
 
-const gpuTime = performance.now() - start
+  multiply2D(input, weight0, fbi['32x4096'], 32, 4096)
+  sum1DReLU(fbi['32x4096'].attachment, bias0, fbi['1x128'], 1, 128)
+  multiply1D(fbi['1x128'].attachment, weight2, fbi['32x4096'], 32, 2048)
+  sum2DReLU(fbi['32x4096'].attachment, bias2, fbi['1x128'], 1, 128)
+  multiply1D(fbi['1x128'].attachment, weight4, fbi['32x4096'], 32, 48)
+  sum2D(fbi['32x4096'].attachment, bias4, fbi['1x128'], 1, 3)
 
-const outputData = new Float32Array(12)
-gl.readPixels(0, 0, 1, 3, gl.RGBA, gl.FLOAT, outputData)
-const output = outputData.slice(0, 10)
-const predicted = classes[argmax(output)]
+  const gpuTime = performance.now() - start
 
-const totalTime = performance.now() - start
+  gl.readPixels(0, 0, 1, 3, gl.RGBA, gl.FLOAT, outputData)
+  const predicted = classes[argmax(output)]
 
-console.log(`Output: ${format(output, 4)}`)
-console.log(`Predicted: ${predicted}`)
-console.log(`GPU time: ${gpuTime}ms`)
-console.log(`Total time: ${totalTime}ms`)
+  const totalTime = performance.now() - start
+
+  console.log(`Output: ${format(output, 4)}`)
+  console.log(`Predicted: ${predicted}`)
+  console.log(`GPU time: ${gpuTime}ms`)
+  console.log(`Total time: ${totalTime}ms`)
+}
+
+for (let i = 0; i < 5; i++) {
+  console.log(separator)
+  predict()
+}
+console.log(separator)
