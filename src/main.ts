@@ -275,7 +275,7 @@ const setupSum1D = (
     viewportHeight: number,
   ) => {
     gl.bindTexture(gl.TEXTURE_2D, xTex)
-    // TODO Set the right TEXTURE_BASE_LEVEL and TEXTURE_MAX_LEVEL before calling generateMipmap
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAX_LEVEL, lod)
     gl.generateMipmap(gl.TEXTURE_2D)
     process(programInfo, fbi, { xTex, bTex }, viewportWidth, viewportHeight)
   }
@@ -320,7 +320,7 @@ const setupSum2D = (
     viewportHeight: number,
   ) => {
     gl.bindTexture(gl.TEXTURE_2D, xTex)
-    // TODO Set the right TEXTURE_BASE_LEVEL and TEXTURE_MAX_LEVEL before calling generateMipmap
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAX_LEVEL, lod)
     gl.generateMipmap(gl.TEXTURE_2D)
     process(programInfo, fbi, { xTex, bTex }, viewportWidth, viewportHeight)
   }
