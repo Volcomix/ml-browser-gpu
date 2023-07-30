@@ -27,7 +27,11 @@ const process = (
   programInfo: twgl.ProgramInfo,
   fbi: twgl.FramebufferInfo,
   uniforms: Record<string, unknown>,
+  viewportWidth: number,
+  viewportHeight: number,
 ) => {
+  gl.viewport(0, 0, viewportWidth, viewportHeight)
+
   gl.bindFramebuffer(gl.FRAMEBUFFER, fbi.framebuffer)
   gl.useProgram(programInfo.program)
   twgl.setBuffersAndAttributes(gl, programInfo, bufferInfo)
@@ -93,9 +97,7 @@ const loadWeight = async (parameterName: string, size: WeightSize) => {
   const programInfo = twgl.createProgramInfo(gl, [vertexShader, fragmentShader])
 
   const viewport = size.viewport ?? size.destination
-  gl.viewport(0, 0, viewport[0], viewport[1])
-
-  process(programInfo, fbi, { tex })
+  process(programInfo, fbi, { tex }, viewport[0], viewport[1])
 
   gl.deleteTexture(tex)
   gl.deleteFramebuffer(fbi.framebuffer)
@@ -182,11 +184,46 @@ const setupMultiply = () => {
     viewportWidth: number,
     viewportHeight: number,
   ) => {
-    gl.viewport(0, 0, viewportWidth, viewportHeight)
-    process(programInfo, fbi, { xTex, wTex })
+    process(programInfo, fbi, { xTex, wTex }, viewportWidth, viewportHeight)
   }
 
   return multiply
+}
+
+const setupSum = () => {
+  const fragmentShader = /* glsl */ `#version 300 es
+
+    precision highp float;
+
+    uniform sampler2D xTex;
+    uniform sampler2D bTex;
+
+    out vec4 y;
+
+    void main() {
+      ivec2 fragCoord = ivec2(gl_FragCoord);
+      vec4 x = texelFetch(xTex, fragCoord, 5) * 1024.0;
+      vec4 b = texelFetch(bTex, fragCoord, 0);
+      y = max(vec4(0), x + b); // ReLU
+    }
+  `
+
+  const programInfo = twgl.createProgramInfo(gl, [vertexShader, fragmentShader])
+
+  const sum = (
+    xTex: WebGLTexture,
+    bTex: WebGLTexture,
+    fbi: twgl.FramebufferInfo,
+    viewportWidth: number,
+    viewportHeight: number,
+  ) => {
+    gl.bindTexture(gl.TEXTURE_2D, xTex)
+    // TODO Set the right TEXTURE_BASE_LEVEL and TEXTURE_MAX_LEVEL before calling generateMipmap
+    gl.generateMipmap(gl.TEXTURE_2D)
+    process(programInfo, fbi, { xTex, bTex }, viewportWidth, viewportHeight)
+  }
+
+  return sum
 }
 
 // TODO Remove linter ignore
@@ -222,8 +259,10 @@ const [weight0, bias0, weight2, bias2, weight4, bias4, input] =
 const fbi = createFrameBufferInfos()
 
 const multiply = setupMultiply()
+const sum = setupSum()
 
 multiply(input, weight0, fbi['32x4096'], 28, 4092)
+sum(fbi['32x4096'].attachments[0], bias0, fbi['1x128'], 1, 128)
 
 if (Number(1)) {
   throw new Error('Implementation not finished')
