@@ -23,9 +23,28 @@ const vertexShader = /* glsl */ `#version 300 es
   }
 `
 
+type FramebufferInfo = Omit<twgl.FramebufferInfo, 'attachments'> & {
+  attachment: WebGLTexture
+}
+
+const createFramebufferInfo = (
+  gl: WebGLRenderingContext,
+  attachment: twgl.AttachmentOptions,
+  width: number,
+  height: number,
+): FramebufferInfo => {
+  const fbi = twgl.createFramebufferInfo(gl, [attachment], width, height)
+  return {
+    framebuffer: fbi.framebuffer,
+    attachment: fbi.attachments[0],
+    width: fbi.width,
+    height: fbi.height,
+  }
+}
+
 const process = (
   programInfo: twgl.ProgramInfo,
-  fbi: twgl.FramebufferInfo,
+  fbi: FramebufferInfo,
   uniforms: Record<string, unknown>,
   viewportWidth: number,
   viewportHeight: number,
@@ -66,9 +85,9 @@ const loadWeight = async (parameterName: string, size: WeightSize) => {
     height: size.source[1],
   })
 
-  const fbi = twgl.createFramebufferInfo(
+  const fbi = createFramebufferInfo(
     gl,
-    [{ internalFormat: gl.RGBA32F }],
+    { internalFormat: gl.RGBA32F },
     size.destination[0],
     size.destination[1],
   )
@@ -103,7 +122,7 @@ const loadWeight = async (parameterName: string, size: WeightSize) => {
   gl.deleteFramebuffer(fbi.framebuffer)
   gl.deleteProgram(programInfo.program)
 
-  return fbi.attachments[0] as WebGLTexture
+  return fbi.attachment
 }
 
 const loadBias = async (parameterName: string, size: number) => {
@@ -139,20 +158,20 @@ const loadInput = () => {
   )
 }
 
-const createFrameBufferInfos = () => {
+type FramebufferInfos = {
+  '32x4096': FramebufferInfo
+  '1x128': FramebufferInfo
+}
+
+const createFramebufferInfos = (): FramebufferInfos => {
   return {
-    '32x4096': twgl.createFramebufferInfo(
+    '32x4096': createFramebufferInfo(
       gl,
-      [{ internalFormat: gl.RGBA32F }],
+      { internalFormat: gl.RGBA32F },
       32,
       4096,
     ),
-    '1x128': twgl.createFramebufferInfo(
-      gl,
-      [{ internalFormat: gl.RGBA32F }],
-      1,
-      128,
-    ),
+    '1x128': createFramebufferInfo(gl, { internalFormat: gl.RGBA32F }, 1, 128),
   }
 }
 
@@ -180,7 +199,7 @@ const setupMultiply = () => {
   const multiply = (
     xTex: WebGLTexture,
     wTex: WebGLTexture,
-    fbi: twgl.FramebufferInfo,
+    fbi: FramebufferInfo,
     viewportWidth: number,
     viewportHeight: number,
   ) => {
@@ -213,7 +232,7 @@ const setupSum = () => {
   const sum = (
     xTex: WebGLTexture,
     bTex: WebGLTexture,
-    fbi: twgl.FramebufferInfo,
+    fbi: FramebufferInfo,
     viewportWidth: number,
     viewportHeight: number,
   ) => {
@@ -256,13 +275,13 @@ const [weight0, bias0, weight2, bias2, weight4, bias4, input] =
     loadInput(),
   ])
 
-const fbi = createFrameBufferInfos()
+const fbi = createFramebufferInfos()
 
 const multiply = setupMultiply()
 const sum = setupSum()
 
 multiply(input, weight0, fbi['32x4096'], 28, 4092)
-sum(fbi['32x4096'].attachments[0], bias0, fbi['1x128'], 1, 128)
+sum(fbi['32x4096'].attachment, bias0, fbi['1x128'], 1, 128)
 
 if (Number(1)) {
   throw new Error('Implementation not finished')
