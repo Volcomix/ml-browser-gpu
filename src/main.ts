@@ -161,41 +161,26 @@ type Activation = (x: string) => string
 const Identity: Activation = (x: string) => x
 const ReLU: Activation = (x: string) => `max(vec4(0), ${x})`
 
-const setupMultiply1D = (tileWidth: number, tileHeight: number) => {
-  const fragmentShader = /* glsl */ `#version 300 es
-
-    precision highp float;
-
-    uniform sampler2D xTex;
-    uniform sampler2D wTex;
-
-    out vec4 y;
-
-    void main() {
-      ivec2 fragCoord = ivec2(gl_FragCoord);
-      ivec2 xCoord = ivec2(0, (fragCoord.x + (fragCoord.y % ${tileHeight}) * ${tileWidth}) / 4);
-      float x = texelFetch(xTex, xCoord, 0)[fragCoord.x % 4];
-      vec4 w = texelFetch(wTex, fragCoord, 0);
-      y = x * w;
-    }
-  `
-
-  const programInfo = twgl.createProgramInfo(gl, [vertexShader, fragmentShader])
-
-  const multiply1D = (
-    xTex: WebGLTexture,
-    wTex: WebGLTexture,
-    fbi: FramebufferInfo,
-    viewportWidth: number,
-    viewportHeight: number,
-  ) => {
-    process(programInfo, fbi, { xTex, wTex }, viewportWidth, viewportHeight)
-  }
-
-  return multiply1D
+type SetupMultiplySize = {
+  source: Size
+  tile: Size
 }
 
-const setupMultiply2D = (tileHeight: number) => {
+const setupMultiply = (
+  size: SetupMultiplySize,
+  sourceComponent: 'R' | 'RGBA' = 'RGBA',
+) => {
+  const xComponent = sourceComponent === 'R' ? '.r' : '[fragCoord.x % 4]'
+
+  const xCoord =
+    size.source[0] === 1
+      ? [0, `fragCoord.x + (fragCoord.y % ${size.tile[1]}) * ${size.tile[0]}`]
+      : ['fragCoord.x', `fragCoord.y % ${size.tile[1]}`]
+
+  if (sourceComponent === 'RGBA') {
+    xCoord[1] = `(${xCoord[1]}) / 4`
+  }
+
   const fragmentShader = /* glsl */ `#version 300 es
 
     precision highp float;
@@ -207,8 +192,8 @@ const setupMultiply2D = (tileHeight: number) => {
 
     void main() {
       ivec2 fragCoord = ivec2(gl_FragCoord);
-      ivec2 xCoord = ivec2(fragCoord.x, fragCoord.y % ${tileHeight});
-      float x = texelFetch(xTex, xCoord, 0).r;
+      ivec2 xCoord = ivec2(${xCoord.join(', ')});
+      float x = texelFetch(xTex, xCoord, 0)${xComponent};
       vec4 w = texelFetch(wTex, fragCoord, 0);
       y = x * w;
     }
@@ -216,7 +201,7 @@ const setupMultiply2D = (tileHeight: number) => {
 
   const programInfo = twgl.createProgramInfo(gl, [vertexShader, fragmentShader])
 
-  const multiply2D = (
+  const multiply = (
     xTex: WebGLTexture,
     wTex: WebGLTexture,
     fbi: FramebufferInfo,
@@ -226,7 +211,7 @@ const setupMultiply2D = (tileHeight: number) => {
     process(programInfo, fbi, { xTex, wTex }, viewportWidth, viewportHeight)
   }
 
-  return multiply2D
+  return multiply
 }
 
 const setupSum1D = (
@@ -344,18 +329,18 @@ const [weight0, bias0, weight2, bias2, weight4, bias4, input] =
 
 const fbi = createFramebufferInfos()
 
-const multiply2D = setupMultiply2D(32)
-const multiply1D = setupMultiply1D(32, 16)
+const multiply0 = setupMultiply({ source: [32, 32], tile: [32, 32] }, 'R')
+const multiply2_4 = setupMultiply({ source: [1, 128], tile: [32, 16] })
 const sum1DReLU = setupSum1D(1024, 5, ReLU)
 const sum2DReLU = setupSum2D(512, 2, 4, ReLU)
 const sum2D = setupSum2D(512, 2, 4)
 
 const predict = () => {
-  multiply2D(input, weight0, fbi['32x4096'], 32, 4096)
+  multiply0(input, weight0, fbi['32x4096'], 32, 4096)
   sum1DReLU(fbi['32x4096'].attachment, bias0, fbi['1x128'], 1, 128)
-  multiply1D(fbi['1x128'].attachment, weight2, fbi['32x4096'], 32, 2048)
+  multiply2_4(fbi['1x128'].attachment, weight2, fbi['32x4096'], 32, 2048)
   sum2DReLU(fbi['32x4096'].attachment, bias2, fbi['1x128'], 1, 128)
-  multiply1D(fbi['1x128'].attachment, weight4, fbi['32x4096'], 32, 48)
+  multiply2_4(fbi['1x128'].attachment, weight4, fbi['32x4096'], 32, 48)
   sum2D(fbi['32x4096'].attachment, bias4, fbi['1x128'], 1, 3)
 }
 
