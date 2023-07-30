@@ -214,53 +214,19 @@ const setupMultiply = (
   return multiply
 }
 
-const setupSum1D = (
-  tileSize: number,
-  lod: number,
-  activation: Activation = Identity,
-) => {
-  const fragmentShader = /* glsl */ `#version 300 es
-
-    precision highp float;
-
-    uniform sampler2D xTex;
-    uniform sampler2D bTex;
-
-    out vec4 y;
-
-    void main() {
-      ivec2 fragCoord = ivec2(gl_FragCoord);
-      vec4 x = texelFetch(xTex, fragCoord, ${lod}) * ${tileSize}.0;
-      vec4 b = texelFetch(bTex, fragCoord, 0);
-      y = ${activation('x + b')};
-    }
-  `
-
-  const programInfo = twgl.createProgramInfo(gl, [vertexShader, fragmentShader])
-
-  const sum1D = (
-    xTex: WebGLTexture,
-    bTex: WebGLTexture,
-    fbi: FramebufferInfo,
-    viewportWidth: number,
-    viewportHeight: number,
-  ) => {
-    gl.bindTexture(gl.TEXTURE_2D, xTex)
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAX_LEVEL, lod)
-    gl.generateMipmap(gl.TEXTURE_2D)
-    process(programInfo, fbi, { xTex, bTex }, viewportWidth, viewportHeight)
-  }
-
-  return sum1D
+type SetupSumSize = {
+  tile: Size
 }
 
-// TODO Improve contract
-const setupSum2D = (
-  tileSize: number,
-  tileCount: number,
-  lod: number,
-  activation: Activation = Identity,
-) => {
+const setupSum = (size: SetupSumSize, activation: Activation = Identity) => {
+  const tileCount = size.tile[0] / size.tile[1]
+  const lod = Math.log2(size.tile[1])
+
+  const x = Array.from(
+    { length: tileCount },
+    (_v, k) => `texelFetch(xTex, ivec2(${k}, fragCoord.y), ${lod})`,
+  ).join(' + ')
+
   const fragmentShader = /* glsl */ `#version 300 es
 
     precision highp float;
@@ -272,10 +238,7 @@ const setupSum2D = (
 
     void main() {
       ivec2 fragCoord = ivec2(gl_FragCoord);
-      vec4 x = (${Array.from(
-        { length: tileCount },
-        (_v, k) => `texelFetch(xTex, ivec2(${k}, fragCoord.y), ${lod})`,
-      ).join(' + ')}) * ${tileSize / tileCount}.0;
+      vec4 x = ${tileCount > 1 ? `(${x})` : x} * ${size.tile[1] ** 2}.0;
       vec4 b = texelFetch(bTex, fragCoord, 0);
       y = ${activation('x + b')};
     }
@@ -283,7 +246,7 @@ const setupSum2D = (
 
   const programInfo = twgl.createProgramInfo(gl, [vertexShader, fragmentShader])
 
-  const sum2D = (
+  const sum = (
     xTex: WebGLTexture,
     bTex: WebGLTexture,
     fbi: FramebufferInfo,
@@ -296,7 +259,7 @@ const setupSum2D = (
     process(programInfo, fbi, { xTex, bTex }, viewportWidth, viewportHeight)
   }
 
-  return sum2D
+  return sum
 }
 
 const [weight0, bias0, weight2, bias2, weight4, bias4, input] =
@@ -328,20 +291,20 @@ const [weight0, bias0, weight2, bias2, weight4, bias4, input] =
   ])
 
 const multiply0 = setupMultiply({ source: [32, 32], tile: [32, 32] }, 'R')
+const sum0_1 = setupSum({ tile: [32, 32] }, ReLU)
 const multiply2_4 = setupMultiply({ source: [1, 128], tile: [32, 16] })
-const sum1DReLU = setupSum1D(1024, 5, ReLU)
-const sum2DReLU = setupSum2D(512, 2, 4, ReLU)
-const sum2D = setupSum2D(512, 2, 4)
+const sum2_3 = setupSum({ tile: [32, 16] }, ReLU)
+const sum4 = setupSum({ tile: [32, 16] })
 
 const fbi = createFramebufferInfos()
 
 const predict = () => {
   multiply0(input, weight0, fbi['32x4096'], 32, 4096)
-  sum1DReLU(fbi['32x4096'].attachment, bias0, fbi['1x128'], 1, 128)
+  sum0_1(fbi['32x4096'].attachment, bias0, fbi['1x128'], 1, 128)
   multiply2_4(fbi['1x128'].attachment, weight2, fbi['32x4096'], 32, 2048)
-  sum2DReLU(fbi['32x4096'].attachment, bias2, fbi['1x128'], 1, 128)
+  sum2_3(fbi['32x4096'].attachment, bias2, fbi['1x128'], 1, 128)
   multiply2_4(fbi['1x128'].attachment, weight4, fbi['32x4096'], 32, 48)
-  sum2D(fbi['32x4096'].attachment, bias4, fbi['1x128'], 1, 3)
+  sum4(fbi['32x4096'].attachment, bias4, fbi['1x128'], 1, 3)
 }
 
 const argmax = (x: Float32Array) => {
