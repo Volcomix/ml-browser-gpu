@@ -175,7 +175,7 @@ const createFramebufferInfos = (): FramebufferInfos => {
   }
 }
 
-const setupMultiply = () => {
+const setupMultiply1D = (tileSize: number) => {
   const fragmentShader = /* glsl */ `#version 300 es
 
     precision highp float;
@@ -187,7 +187,7 @@ const setupMultiply = () => {
 
     void main() {
       ivec2 fragCoord = ivec2(gl_FragCoord);
-      ivec2 xCoord = ivec2(fragCoord.x, fragCoord.y % 32);
+      ivec2 xCoord = ivec2(fragCoord.x, fragCoord.y % ${tileSize});
       float x = texelFetch(xTex, xCoord, 0).r;
       vec4 w = texelFetch(wTex, fragCoord, 0);
       y = x * w;
@@ -196,7 +196,7 @@ const setupMultiply = () => {
 
   const programInfo = twgl.createProgramInfo(gl, [vertexShader, fragmentShader])
 
-  const multiply = (
+  const multiply1D = (
     xTex: WebGLTexture,
     wTex: WebGLTexture,
     fbi: FramebufferInfo,
@@ -206,7 +206,41 @@ const setupMultiply = () => {
     process(programInfo, fbi, { xTex, wTex }, viewportWidth, viewportHeight)
   }
 
-  return multiply
+  return multiply1D
+}
+
+const setupMultiply2D = (tileWidth: number, tileHeight: number) => {
+  const fragmentShader = /* glsl */ `#version 300 es
+
+    precision highp float;
+
+    uniform sampler2D xTex;
+    uniform sampler2D wTex;
+
+    out vec4 y;
+
+    void main() {
+      ivec2 fragCoord = ivec2(gl_FragCoord);
+      ivec2 xCoord = ivec2(0, (fragCoord.x + (fragCoord.y % ${tileHeight}) * ${tileWidth}) / 4);
+      float x = texelFetch(xTex, xCoord, 0)[fragCoord.x % 4];
+      vec4 w = texelFetch(wTex, fragCoord, 0);
+      y = x * w;
+    }
+  `
+
+  const programInfo = twgl.createProgramInfo(gl, [vertexShader, fragmentShader])
+
+  const multiply2D = (
+    xTex: WebGLTexture,
+    wTex: WebGLTexture,
+    fbi: FramebufferInfo,
+    viewportWidth: number,
+    viewportHeight: number,
+  ) => {
+    process(programInfo, fbi, { xTex, wTex }, viewportWidth, viewportHeight)
+  }
+
+  return multiply2D
 }
 
 const setupSum = () => {
@@ -277,11 +311,13 @@ const [weight0, bias0, weight2, bias2, weight4, bias4, input] =
 
 const fbi = createFramebufferInfos()
 
-const multiply = setupMultiply()
+const multiply1D = setupMultiply1D(32)
+const multiply2D = setupMultiply2D(32, 16)
 const sum = setupSum()
 
-multiply(input, weight0, fbi['32x4096'], 28, 4092)
+multiply1D(input, weight0, fbi['32x4096'], 28, 4092)
 sum(fbi['32x4096'].attachment, bias0, fbi['1x128'], 1, 128)
+multiply2D(fbi['1x128'].attachment, weight2, fbi['32x4096'], 32, 2048)
 
 if (Number(1)) {
   throw new Error('Implementation not finished')
