@@ -151,11 +151,6 @@ const loadInput = () => {
   )
 }
 
-const createFramebufferInfos = () => ({
-  '32x4096': createFramebufferInfo({ internalFormat: gl.RGBA32F }, 32, 4096),
-  '1x128': createFramebufferInfo({ internalFormat: gl.RGBA32F }, 1, 128),
-})
-
 type Activation = (x: string) => string
 
 const Identity: Activation = (x: string) => x
@@ -296,7 +291,10 @@ const multiply2_4 = setupMultiply({ source: [1, 128], tile: [32, 16] })
 const sum2_3 = setupSum({ tile: [32, 16] }, ReLU)
 const sum4 = setupSum({ tile: [32, 16] })
 
-const fbi = createFramebufferInfos()
+const fbi = {
+  '32x4096': createFramebufferInfo({ internalFormat: gl.RGBA32F }, 32, 4096),
+  '1x128': createFramebufferInfo({ internalFormat: gl.RGBA32F }, 1, 128),
+}
 
 const predict = () => {
   multiply0(input, weight0, fbi['32x4096'], 32, 4096)
