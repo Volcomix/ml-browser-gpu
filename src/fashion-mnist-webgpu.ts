@@ -11,7 +11,8 @@ if (!adapter) {
 
 const device = await adapter.requestDevice()
 
-const bufferSize = 4
+const count = 4
+const bufferSize = count * 4
 
 const module = device.createShaderModule({
   code: /* wgsl */ `
@@ -41,10 +42,10 @@ const output = device.createBuffer({
   usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
 })
 
-// const stagingBuffer = device.createBuffer({
-//   size: bufferSize,
-//   usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
-// })
+const stagingBuffer = device.createBuffer({
+  size: bufferSize,
+  usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
+})
 
 const bindGroup = device.createBindGroup({
   layout: pipeline.getBindGroupLayout(0),
@@ -52,8 +53,21 @@ const bindGroup = device.createBindGroup({
 })
 
 const encoder = device.createCommandEncoder()
+
 const pass = encoder.beginComputePass()
 pass.setPipeline(pipeline)
 pass.setBindGroup(0, bindGroup)
-pass.dispatchWorkgroups(bufferSize)
+pass.dispatchWorkgroups(count)
 pass.end()
+
+encoder.copyBufferToBuffer(output, 0, stagingBuffer, 0, bufferSize)
+
+const commands = encoder.finish()
+device.queue.submit([commands])
+
+await stagingBuffer.mapAsync(GPUMapMode.READ)
+const result = new Float32Array(stagingBuffer.getMappedRange())
+
+console.log(`Result: ${result}`)
+
+stagingBuffer.unmap()
