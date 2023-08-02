@@ -14,7 +14,7 @@ const device = await adapter.requestDevice()
 const bufferSize = 4
 
 const module = device.createShaderModule({
-  code: `
+  code: /* wgsl */ `
     @group(0) @binding(0)
     var<storage, read_write> data: array<f32>;
 
