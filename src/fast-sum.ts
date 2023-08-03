@@ -2,7 +2,7 @@ import * as twgl from 'twgl.js'
 
 import './style.css'
 
-const dimensionSize = 2048
+const dimensionSize = 4096
 const width = dimensionSize
 const height = dimensionSize
 const data = new Float32Array(width * height)
@@ -27,7 +27,7 @@ const sumJs = () => {
   console.log(`[js] Elapsed: ${elapsed}ms`)
 }
 
-const sumWebGL = () => {
+const setupWebGL = () => {
   const canvas = new OffscreenCanvas(1, 1)
   const gl = canvas.getContext('webgl2')
   if (!gl) {
@@ -40,28 +40,28 @@ const sumWebGL = () => {
   })
 
   const vertexShader = /* glsl */ `#version 300 es
-      
-    in vec2 inPosition;
+    
+  in vec2 inPosition;
 
-    void main() {
-      gl_Position = vec4(inPosition, 0, 1);
-    }
-  `
+  void main() {
+    gl_Position = vec4(inPosition, 0, 1);
+  }
+`
 
   const lod = Math.log2(dimensionSize)
 
   const fragmentShader = /* glsl */ `#version 300 es
 
-    precision highp float;
+  precision highp float;
 
-    uniform sampler2D xTex;
+  uniform sampler2D xTex;
 
-    out float y;
+  out float y;
 
-    void main() {
-      y = texelFetch(xTex, ivec2(gl_FragCoord), ${lod}).r * ${data.length}.0;
-    }
-  `
+  void main() {
+    y = texelFetch(xTex, ivec2(gl_FragCoord), ${lod}).r * ${data.length}.0;
+  }
+`
 
   const programInfo = twgl.createProgramInfo(gl, [vertexShader, fragmentShader])
 
@@ -79,31 +79,38 @@ const sumWebGL = () => {
     1,
   )
 
-  const start = performance.now()
+  const sumWebGL = () => {
+    const start = performance.now()
 
-  gl.bindTexture(gl.TEXTURE_2D, texture)
-  gl.generateMipmap(gl.TEXTURE_2D)
+    gl.bindTexture(gl.TEXTURE_2D, texture)
+    gl.generateMipmap(gl.TEXTURE_2D)
 
-  gl.viewport(0, 0, 1, 1)
+    gl.viewport(0, 0, 1, 1)
 
-  gl.bindFramebuffer(gl.FRAMEBUFFER, fbi.framebuffer)
-  gl.useProgram(programInfo.program)
-  twgl.setBuffersAndAttributes(gl, programInfo, bufferInfo)
-  twgl.setUniforms(programInfo, {
-    xTex: texture,
-  })
-  twgl.drawBufferInfo(gl, bufferInfo)
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbi.framebuffer)
+    gl.useProgram(programInfo.program)
+    twgl.setBuffersAndAttributes(gl, programInfo, bufferInfo)
+    twgl.setUniforms(programInfo, { xTex: texture })
+    twgl.drawBufferInfo(gl, bufferInfo)
 
-  gl.readPixels(0, 0, 1, 1, gl.RED, gl.FLOAT, resultData)
+    gl.readPixels(0, 0, 1, 1, gl.RED, gl.FLOAT, resultData)
 
-  const elapsed = performance.now() - start
+    const elapsed = performance.now() - start
 
-  console.log(`[WebGL] Result: ${resultData}`)
-  console.log(`[WebGL] Elapsed: ${elapsed}ms`)
+    console.log(`[WebGL] Result: ${resultData}`)
+    console.log(`[WebGL] Elapsed: ${elapsed}ms`)
+  }
+
+  return sumWebGL
 }
 
 populateData()
 console.log('-'.repeat(40))
-sumJs()
+for (let i = 0; i < 10; i++) {
+  sumJs()
+}
 console.log('-'.repeat(40))
-sumWebGL()
+const sumWebGL = setupWebGL()
+for (let i = 0; i < 10; i++) {
+  sumWebGL()
+}
