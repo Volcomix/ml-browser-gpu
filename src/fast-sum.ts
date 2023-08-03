@@ -7,13 +7,15 @@ const height = 2048
 const data = new Float32Array(width * height)
 const resultData = new Float32Array(1)
 
-const start = performance.now()
-for (let i = 0; i < data.length; i++) {
-  data[i] = Math.random()
-}
-const elapsed = performance.now() - start
+const populateData = () => {
+  const start = performance.now()
+  for (let i = 0; i < data.length; i++) {
+    data[i] = Math.random()
+  }
+  const elapsed = performance.now() - start
 
-console.log(`Buffer populated in ${elapsed}ms`)
+  console.log(`Data populated in ${elapsed}ms`)
+}
 
 const sumJs = () => {
   const start = performance.now()
@@ -100,5 +102,8 @@ const sumWebGL = () => {
   console.log(`[WebGL] Total time: ${totalTime}ms`)
 }
 
+populateData()
+console.log('-'.repeat(40))
 sumJs()
+console.log('-'.repeat(40))
 sumWebGL()
