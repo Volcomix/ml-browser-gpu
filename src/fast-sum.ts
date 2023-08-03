@@ -2,7 +2,8 @@ import * as twgl from 'twgl.js'
 
 import './style.css'
 
-const dimensionSize = 4096
+const dimensionSize = 2048
+
 const width = dimensionSize
 const height = dimensionSize
 const data = new Float32Array(width * height)
@@ -104,13 +105,63 @@ const setupWebGL = () => {
   return sumWebGL
 }
 
+const setupWebGPU = async () => {
+  if (!navigator.gpu) {
+    throw Error('WebGPU not supported.')
+  }
+
+  const adapter = await navigator.gpu.requestAdapter()
+  if (!adapter) {
+    throw Error("Couldn't request WebGPU adapter.")
+  }
+
+  const device = await adapter.requestDevice()
+
+  const module = device.createShaderModule({
+    code: /* wgsl */ `
+      @group(0) @binding(0)
+      var<storage> data: array<f32>;
+  
+      @compute @workgroup_size(64)
+      fn main(
+        @builtin(global_invocation_id)
+        id: vec3u
+      ) {
+        data[id.x] = data[id.x] * 2;
+      }
+    `,
+  })
+
+  const dataBuffer = device.createBuffer({
+    size: data.byteLength,
+    usage: GPUBufferUsage.STORAGE,
+  })
+
+  console.log({ module, dataBuffer })
+
+  const sumWebGPU = () => {}
+
+  return sumWebGPU
+}
+
 populateData()
+
 console.log('-'.repeat(40))
+
 for (let i = 0; i < 10; i++) {
   sumJs()
 }
+
 console.log('-'.repeat(40))
+
 const sumWebGL = setupWebGL()
 for (let i = 0; i < 10; i++) {
   sumWebGL()
+}
+
+console.log('-'.repeat(40))
+
+const sumWebGPU = await setupWebGPU()
+for (let i = 0; i < 10; i++) {
+  sumWebGPU()
 }
