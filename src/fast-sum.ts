@@ -7,7 +7,7 @@ const dimensionSize = 2048
 const width = dimensionSize
 const height = dimensionSize
 const data = new Float32Array(width * height)
-const resultData = new Float32Array(1)
+const resultData = new Float32Array(4)
 
 const populateData = () => {
   const start = performance.now()
@@ -94,11 +94,11 @@ const setupWebGL = () => {
     twgl.setUniforms(programInfo, { xTex: texture })
     twgl.drawBufferInfo(gl, bufferInfo)
 
-    gl.readPixels(0, 0, 1, 1, gl.RED, gl.FLOAT, resultData)
+    gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.FLOAT, resultData)
 
     const elapsed = performance.now() - start
 
-    console.log(`[WebGL] Result: ${resultData}`)
+    console.log(`[WebGL] Result: ${resultData[0]}`)
     console.log(`[WebGL] Elapsed: ${elapsed}ms`)
   }
 
