@@ -120,14 +120,17 @@ const setupWebGPU = async () => {
   const module = device.createShaderModule({
     code: /* wgsl */ `
       @group(0) @binding(0)
-      var<storage> data: array<f32>;
+      var<storage, read_write> data: array<f32>;
   
       @compute @workgroup_size(64)
       fn main(
         @builtin(global_invocation_id)
-        id: vec3u
+        global_id: vec3u,
+
+        @builtin(local_invocation_id)
+        local_id: vec3u
       ) {
-        data[id.x] = data[id.x] * 2;
+        data[global_id.x] = data[global_id.x] * 2.0;
       }
     `,
   })
