@@ -2,8 +2,9 @@ import * as twgl from 'twgl.js'
 
 import './style.css'
 
-const width = 2048
-const height = 2048
+const dimensionSize = 2048
+const width = dimensionSize
+const height = dimensionSize
 const data = new Float32Array(width * height)
 const resultData = new Float32Array(1)
 
@@ -23,7 +24,7 @@ const sumJs = () => {
   const elapsed = performance.now() - start
 
   console.log(`[js] Result: ${result}`)
-  console.log(`[js] CPU time: ${elapsed}ms`)
+  console.log(`[js] Elapsed: ${elapsed}ms`)
 }
 
 const sumWebGL = () => {
@@ -39,26 +40,28 @@ const sumWebGL = () => {
   })
 
   const vertexShader = /* glsl */ `#version 300 es
-     
-  in vec2 inPosition;
+      
+    in vec2 inPosition;
 
-  void main() {
-    gl_Position = vec4(inPosition, 0, 1);
-  }
-`
+    void main() {
+      gl_Position = vec4(inPosition, 0, 1);
+    }
+  `
+
+  const lod = Math.log2(dimensionSize)
 
   const fragmentShader = /* glsl */ `#version 300 es
 
-  precision highp float;
+    precision highp float;
 
-  uniform sampler2D xTex;
+    uniform sampler2D xTex;
 
-  out float y;
+    out float y;
 
-  void main() {
-    y = texelFetch(xTex, ivec2(gl_FragCoord), 11).r * ${data.length}.0;
-  }
-`
+    void main() {
+      y = texelFetch(xTex, ivec2(gl_FragCoord), ${lod}).r * ${data.length}.0;
+    }
+  `
 
   const programInfo = twgl.createProgramInfo(gl, [vertexShader, fragmentShader])
 
@@ -72,8 +75,8 @@ const sumWebGL = () => {
   const fbi = twgl.createFramebufferInfo(
     gl,
     [{ internalFormat: gl.R32F }],
-    width,
-    height,
+    1,
+    1,
   )
 
   const start = performance.now()
@@ -81,7 +84,7 @@ const sumWebGL = () => {
   gl.bindTexture(gl.TEXTURE_2D, texture)
   gl.generateMipmap(gl.TEXTURE_2D)
 
-  gl.viewport(0, 0, 2048, 2048)
+  gl.viewport(0, 0, 1, 1)
 
   gl.bindFramebuffer(gl.FRAMEBUFFER, fbi.framebuffer)
   gl.useProgram(programInfo.program)
@@ -91,15 +94,12 @@ const sumWebGL = () => {
   })
   twgl.drawBufferInfo(gl, bufferInfo)
 
-  const gpuTime = performance.now() - start
-
   gl.readPixels(0, 0, 1, 1, gl.RED, gl.FLOAT, resultData)
 
-  const totalTime = performance.now() - start
+  const elapsed = performance.now() - start
 
   console.log(`[WebGL] Result: ${resultData}`)
-  console.log(`[WebGL] GPU time: ${gpuTime}ms`)
-  console.log(`[WebGL] Total time: ${totalTime}ms`)
+  console.log(`[WebGL] Elapsed: ${elapsed}ms`)
 }
 
 populateData()
