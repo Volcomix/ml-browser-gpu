@@ -198,24 +198,27 @@ const setupWebGPU = async () => {
   return sumWebGPU
 }
 
+const iterationCount = 10
+const separator = '-'.repeat(40)
+
 populateData()
 
-console.log('-'.repeat(40))
+console.log(separator)
 
-for (let i = 0; i < 10; i++) {
+for (let i = 0; i < iterationCount; i++) {
   sumJs()
 }
 
-console.log('-'.repeat(40))
+console.log(separator)
 
 const sumWebGL = setupWebGL()
-for (let i = 0; i < 10; i++) {
+for (let i = 0; i < iterationCount; i++) {
   sumWebGL()
 }
 
-console.log('-'.repeat(40))
+console.log(separator)
 
 const sumWebGPU = await setupWebGPU()
-for (let i = 0; i < 10; i++) {
+for (let i = 0; i < iterationCount; i++) {
   await sumWebGPU()
 }
