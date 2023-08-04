@@ -41,28 +41,28 @@ const setupWebGL = () => {
   })
 
   const vertexShader = /* glsl */ `#version 300 es
-    
-  in vec2 inPosition;
+      
+    in vec2 inPosition;
 
-  void main() {
-    gl_Position = vec4(inPosition, 0, 1);
-  }
-`
+    void main() {
+      gl_Position = vec4(inPosition, 0, 1);
+    }
+  `
 
   const lod = Math.log2(dimensionSize)
 
   const fragmentShader = /* glsl */ `#version 300 es
 
-  precision highp float;
+    precision highp float;
 
-  uniform sampler2D xTex;
+    uniform sampler2D xTex;
 
-  out float y;
+    out float y;
 
-  void main() {
-    y = texelFetch(xTex, ivec2(gl_FragCoord), ${lod}).r * ${data.length}.0;
-  }
-`
+    void main() {
+      y = texelFetch(xTex, ivec2(gl_FragCoord), ${lod}).r * ${data.length}.0;
+    }
+  `
 
   const programInfo = twgl.createProgramInfo(gl, [vertexShader, fragmentShader])
 
@@ -109,12 +109,10 @@ const setupWebGPU = async () => {
   if (!navigator.gpu) {
     throw Error('WebGPU not supported.')
   }
-
   const adapter = await navigator.gpu.requestAdapter()
   if (!adapter) {
     throw Error("Couldn't request WebGPU adapter.")
   }
-
   const device = await adapter.requestDevice()
 
   const module = device.createShaderModule({
@@ -136,13 +134,66 @@ const setupWebGPU = async () => {
   })
 
   const dataBuffer = device.createBuffer({
-    size: data.byteLength,
-    usage: GPUBufferUsage.STORAGE,
+    size: 16 * 4,
+    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+    mappedAtCreation: true,
+  })
+  const data = new Float32Array(dataBuffer.getMappedRange())
+  data.set([10, 1, 8, -1, 0, -2, 3, 5, -2, -3, 2, 7, 0, 11, 0, 2])
+  dataBuffer.unmap()
+
+  const stagingBuffer = device.createBuffer({
+    size: 4,
+    usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
   })
 
-  console.log({ module, dataBuffer })
+  const bindGroupLayout = device.createBindGroupLayout({
+    entries: [
+      {
+        binding: 0,
+        visibility: GPUShaderStage.COMPUTE,
+        buffer: { type: 'storage' },
+      },
+    ],
+  })
+  const bindGroup = device.createBindGroup({
+    layout: bindGroupLayout,
+    entries: [{ binding: 0, resource: { buffer: dataBuffer } }],
+  })
+  const pipelineLayout = device.createPipelineLayout({
+    bindGroupLayouts: [bindGroupLayout],
+  })
+  const pipeline = device.createComputePipeline({
+    layout: pipelineLayout,
+    compute: { module, entryPoint: 'main' },
+  })
 
-  const sumWebGPU = () => {}
+  const sumWebGPU = async () => {
+    const start = performance.now()
+
+    const encoder = device.createCommandEncoder()
+
+    const pass = encoder.beginComputePass()
+    pass.setPipeline(pipeline)
+    pass.setBindGroup(0, bindGroup)
+    pass.dispatchWorkgroups(Math.ceil(dataBuffer.size / 4 / 64))
+    pass.end()
+
+    encoder.copyBufferToBuffer(dataBuffer, 0, stagingBuffer, 0, 4)
+
+    const commands = encoder.finish()
+    device.queue.submit([commands])
+
+    await stagingBuffer.mapAsync(GPUMapMode.READ)
+
+    const elapsed = performance.now() - start
+    const stagingData = new Float32Array(stagingBuffer.getMappedRange())
+
+    console.log(`[WebGPU] Elapsed: ${elapsed}ms`)
+    console.log(`[WebGPU] Result: ${stagingData}`)
+
+    stagingBuffer.unmap()
+  }
 
   return sumWebGPU
 }
@@ -166,5 +217,5 @@ console.log('-'.repeat(40))
 
 const sumWebGPU = await setupWebGPU()
 for (let i = 0; i < 10; i++) {
-  sumWebGPU()
+  await sumWebGPU()
 }
