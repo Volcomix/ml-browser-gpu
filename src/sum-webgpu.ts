@@ -12,24 +12,27 @@ const device = await adapter.requestDevice()
 const time = (label = 'time') => console.time(label)
 const timeEnd = (label = 'time') => console.timeEnd(label)
 
-const input = new Int32Array(2 ** 22)
+const generateInput = (count: number) => {
+  time(generateInput.name)
+  const input = Int32Array.from({ length: count }, () =>
+    Math.round(Math.random() * 10),
+  )
+  timeEnd(generateInput.name)
+  return input
+}
 
-const populateInput = () => {
-  time(populateInput.name)
-  for (let i = 0; i < input.length; i++) {
-    input[i] = Math.round(Math.random() * 10)
+const setupSumCPU = (input: Int32Array) => {
+  const sumCPU = () => {
+    time()
+    const result = input.reduce((a, b) => a + b)
+    timeEnd()
+    return result
   }
-  timeEnd(populateInput.name)
+
+  return sumCPU
 }
 
-const sumCPU = () => {
-  time()
-  const result = input.reduce((a, b) => a + b)
-  timeEnd()
-  return result
-}
-
-const setupSumSequential = async () => {
+const setupSumSequential = async (input: Int32Array) => {
   const module = device.createShaderModule({
     code: /* wgsl */ `
       @group(0) @binding(0)
@@ -122,13 +125,19 @@ const setupSumSequential = async () => {
   return sumSequential
 }
 
-populateInput()
-for (const sum of [sumCPU, await setupSumSequential()]) {
-  console.group(sum.name)
-  let result
-  for (let i = 0; i < 10; i++) {
-    result = await sum()
+const maxCount = 2 ** 22
+for (let count = 64; count <= maxCount; count *= 2) {
+  console.group(`${count} ints`)
+  const input = generateInput(count)
+  for (const setupSum of [setupSumCPU, setupSumSequential]) {
+    const sum = await setupSum(input)
+    console.group(sum.name)
+    let result
+    for (let i = 0; i < 10; i++) {
+      result = await sum()
+    }
+    console.log(`result: ${result}`)
+    console.groupEnd()
   }
-  console.log(`result: ${result}`)
   console.groupEnd()
 }
