@@ -118,30 +118,32 @@ const setupWebGPU = async () => {
   const module = device.createShaderModule({
     code: /* wgsl */ `
       @group(0) @binding(0)
-      var<storage, read_write> data: array<f32>;
-  
-      @compute @workgroup_size(64)
-      fn main(
-        @builtin(global_invocation_id)
-        global_id: vec3u,
+      var<storage> data: array<f32>;
 
-        @builtin(local_invocation_id)
-        local_id: vec3u
-      ) {
-        data[global_id.x] = data[global_id.x] * 2.0;
+      @group(0) @binding(1)
+      var<storage, read_write> result: array<f32>;
+  
+      @compute @workgroup_size(1)
+      fn main() {
+        var sum = 0f;
+        for (var i = 0i; i < ${data.length}; i++) {
+          sum += data[i];
+        }
+        result[0] = sum;
       }
     `,
   })
 
   const dataBuffer = device.createBuffer({
-    size: 16 * 4,
-    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
-    mappedAtCreation: true,
+    size: data.byteLength,
+    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
   })
-  const data = new Float32Array(dataBuffer.getMappedRange())
-  data.set([10, 1, 8, -1, 0, -2, 3, 5, -2, -3, 2, 7, 0, 11, 0, 2])
-  dataBuffer.unmap()
+  device.queue.writeBuffer(dataBuffer, 0, data)
 
+  const resultBuffer = device.createBuffer({
+    size: 4,
+    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+  })
   const stagingBuffer = device.createBuffer({
     size: 4,
     usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
@@ -152,13 +154,21 @@ const setupWebGPU = async () => {
       {
         binding: 0,
         visibility: GPUShaderStage.COMPUTE,
+        buffer: { type: 'read-only-storage' },
+      },
+      {
+        binding: 1,
+        visibility: GPUShaderStage.COMPUTE,
         buffer: { type: 'storage' },
       },
     ],
   })
   const bindGroup = device.createBindGroup({
     layout: bindGroupLayout,
-    entries: [{ binding: 0, resource: { buffer: dataBuffer } }],
+    entries: [
+      { binding: 0, resource: { buffer: dataBuffer } },
+      { binding: 1, resource: { buffer: resultBuffer } },
+    ],
   })
   const pipelineLayout = device.createPipelineLayout({
     bindGroupLayouts: [bindGroupLayout],
@@ -176,10 +186,10 @@ const setupWebGPU = async () => {
     const pass = encoder.beginComputePass()
     pass.setPipeline(pipeline)
     pass.setBindGroup(0, bindGroup)
-    pass.dispatchWorkgroups(Math.ceil(dataBuffer.size / 4 / 64))
+    pass.dispatchWorkgroups(1)
     pass.end()
 
-    encoder.copyBufferToBuffer(dataBuffer, 0, stagingBuffer, 0, 4)
+    encoder.copyBufferToBuffer(resultBuffer, 0, stagingBuffer, 0, 4)
 
     const commands = encoder.finish()
     device.queue.submit([commands])
@@ -189,8 +199,8 @@ const setupWebGPU = async () => {
     const elapsed = performance.now() - start
     const stagingData = new Float32Array(stagingBuffer.getMappedRange())
 
-    console.log(`[WebGPU] Elapsed: ${elapsed}ms`)
     console.log(`[WebGPU] Result: ${stagingData}`)
+    console.log(`[WebGPU] Elapsed: ${elapsed}ms`)
 
     stagingBuffer.unmap()
   }
