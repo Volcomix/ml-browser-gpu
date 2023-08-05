@@ -125,8 +125,60 @@ const setupSumSequential = async (input: Int32Array) => {
   return sumSequential
 }
 
-const maxCount = 2 ** 22
-for (let count = 64; count <= maxCount; count *= 2) {
+const searchParams = new URLSearchParams(location.search)
+let minCount = Number(searchParams.get('minCount') ?? 64)
+let maxCount = Number(searchParams.get('maxCount') ?? 2 ** 22)
+
+const superscripts: Record<string, string> = {
+  '0': '⁰',
+  '1': '¹',
+  '2': '²',
+  '3': '³',
+  '4': '⁴',
+  '5': '⁵',
+  '6': '⁶',
+  '7': '⁷',
+  '8': '⁸',
+  '9': '⁹',
+}
+
+const minCountElement =
+  document.querySelector<HTMLSelectElement>('[name=minCount]')!
+for (let i = 2; i <= 26; i++) {
+  const option = document.createElement('option')
+  option.value = `${2 ** i}`
+  option.innerHTML = `${2 ** i} (2${[...String(i)]
+    .map((value) => superscripts[value])
+    .join('')})`
+  minCountElement.appendChild(option)
+}
+minCountElement.value = String(minCount)
+minCountElement.onchange = () => {
+  minCount = Number(minCountElement.value)
+  const searchParams = new URLSearchParams(location.search)
+  searchParams.set('minCount', String(minCount))
+  history.replaceState(null, '', `?${searchParams}`)
+}
+
+const maxCountElement =
+  document.querySelector<HTMLSelectElement>('[name=maxCount]')!
+for (let i = 2; i <= 26; i++) {
+  const option = document.createElement('option')
+  option.value = `${2 ** i}`
+  option.innerHTML = `${2 ** i} (2${[...String(i)]
+    .map((value) => superscripts[value])
+    .join('')})`
+  maxCountElement.appendChild(option)
+}
+maxCountElement.value = String(maxCount)
+maxCountElement.onchange = () => {
+  maxCount = Number(maxCountElement.value)
+  const searchParams = new URLSearchParams(location.search)
+  searchParams.set('maxCount', String(maxCount))
+  history.replaceState(null, '', `?${searchParams}`)
+}
+
+for (let count = minCount; count <= maxCount; count *= 2) {
   console.group(`${count} ints`)
   const input = generateInput(count)
   for (const setupSum of [setupSumCPU, setupSumSequential]) {
