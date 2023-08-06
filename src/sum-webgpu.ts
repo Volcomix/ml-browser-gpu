@@ -154,6 +154,7 @@ const superscripts: Record<string, string> = {
 const bindElement = (
   element: HTMLInputElement | HTMLSelectElement,
   paramName: ParamName,
+  callback?: () => void,
 ) => {
   const value = params[paramName]
   element.value = typeof value === 'string' ? value : String(value)
@@ -163,32 +164,76 @@ const bindElement = (
     const searchParams = new URLSearchParams(location.search)
     searchParams.set(paramName, element.value)
     history.replaceState(null, '', `?${searchParams}`)
+    callback?.()
   }
 }
+
+const setups = [setupSumCPU, setupSumSequential]
+
+const updateTable = () => {
+  const { minIntCount, maxIntCount } = params
+
+  const intCountHeader = document.querySelector<HTMLTableCellElement>(
+    'thead tr:first-of-type th:last-of-type',
+  )!
+  intCountHeader.colSpan = Math.log2(maxIntCount) - Math.log2(minIntCount) + 1
+
+  const intCountValues = document.querySelector<HTMLTableRowElement>(
+    'thead tr:last-of-type',
+  )!
+  const intCountValuesChildren: HTMLTableCellElement[] = []
+  intCountValuesChildren.push(document.createElement('th'))
+  for (let count = minIntCount; count <= maxIntCount; count *= 2) {
+    const headerCell = document.createElement('th')
+    headerCell.textContent = `${count} (2${[...String(Math.log2(count))]
+      .map((value) => superscripts[value])
+      .join('')})`
+    intCountValuesChildren.push(headerCell)
+  }
+  intCountValues.replaceChildren(...intCountValuesChildren)
+
+  const tableBody = document.querySelector('tbody')!
+  const tableRows: HTMLTableRowElement[] = []
+  for (const setupSum of setups) {
+    const row = document.createElement('tr')
+    const dataCell = document.createElement('td')
+    dataCell.textContent = setupSum.name.replace('setupS', 's')
+    row.appendChild(dataCell)
+    for (let count = minIntCount; count <= maxIntCount; count *= 2) {
+      const dataCell = document.createElement('td')
+      dataCell.textContent = 'ready'
+      row.appendChild(dataCell)
+    }
+    tableRows.push(row)
+  }
+  tableBody.replaceChildren(...tableRows)
+}
+
+updateTable()
 
 const minIntCountElement =
   document.querySelector<HTMLSelectElement>('[name=minIntCount]')!
 for (let i = 2; i <= 26; i++) {
   const option = document.createElement('option')
   option.value = `${2 ** i}`
-  option.innerHTML = `${2 ** i} (2${[...String(i)]
+  option.textContent = `${2 ** i} (2${[...String(i)]
     .map((value) => superscripts[value])
     .join('')})`
   minIntCountElement.appendChild(option)
 }
-bindElement(minIntCountElement, 'minIntCount')
+bindElement(minIntCountElement, 'minIntCount', updateTable)
 
 const maxIntCountElement =
   document.querySelector<HTMLSelectElement>('[name=maxIntCount]')!
 for (let i = 2; i <= 26; i++) {
   const option = document.createElement('option')
   option.value = `${2 ** i}`
-  option.innerHTML = `${2 ** i} (2${[...String(i)]
+  option.textContent = `${2 ** i} (2${[...String(i)]
     .map((value) => superscripts[value])
     .join('')})`
   maxIntCountElement.appendChild(option)
 }
-bindElement(maxIntCountElement, 'maxIntCount')
+bindElement(maxIntCountElement, 'maxIntCount', updateTable)
 
 bindElement(
   document.querySelector<HTMLInputElement>('[name=runLimit]')!,
@@ -199,13 +244,12 @@ bindElement(
   'runLimitType',
 )
 
-const button = document.querySelector('button')!
-button.onclick = async () => {
+document.querySelector('button')!.onclick = async () => {
   const { minIntCount, maxIntCount, runLimit, runLimitType } = params
   for (let count = minIntCount; count <= maxIntCount; count *= 2) {
     console.group(`${count} ints`)
     const input = generateInput(count)
-    for (const setupSum of [setupSumCPU, setupSumSequential]) {
+    for (const setupSum of setups) {
       const sum = await setupSum(input)
       console.group(sum.name)
       let result
