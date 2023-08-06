@@ -46,8 +46,8 @@ const setupSumSequential = async (input: Int32Array) => {
 
       @compute @workgroup_size(1)
       fn main() {
-        var sum = 0i;
-        for (var i = 0i; i < ${input.length}; i++) {
+        var sum = 0;
+        for (var i = 0; i < ${input.length}; i++) {
           sum += input[i];
         }
         output[0] = sum;
@@ -128,6 +128,121 @@ const setupSumSequential = async (input: Int32Array) => {
   return sumSequential
 }
 
+const setupSumReduction = async (input: Int32Array) => {
+  let workgroupCountX = input.length / 64
+  let workgroupCountY = 1
+  while (workgroupCountX > 65535) {
+    workgroupCountX /= 2
+    workgroupCountY *= 2
+  }
+
+  const module = device.createShaderModule({
+    code: /* wgsl */ `
+      @group(0) @binding(0)
+      var<storage> input: array<u32>;
+
+      @group(0) @binding(1)
+      var<storage, read_write> output: array<u32>;
+
+      var<workgroup> sharedData: array<u32, 64>;
+
+      @compute @workgroup_size(64)
+      fn main(
+        @builtin(global_invocation_id)
+        globalId: vec3u,
+
+        @builtin(local_invocation_id)
+        localId: vec3u,
+      ) {
+        let i = globalId.x + globalId.y * ${workgroupCountX * 64};
+        
+        sharedData[localId.x] = input[i];
+        workgroupBarrier();
+
+        if (localId.x == 0) {
+          var sum = 0u;
+          for (var j = 0u; j < 64; j++) {
+            sum += sharedData[localId.x + j];
+          }
+          output[0] = sum;
+        }
+      }
+    `,
+  })
+
+  const inputBuffer = device.createBuffer({
+    size: input.byteLength,
+    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+  })
+  device.queue.writeBuffer(inputBuffer, 0, input)
+
+  const outputBuffer = device.createBuffer({
+    size: 4,
+    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+  })
+  const stagingBuffer = device.createBuffer({
+    size: 4,
+    usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
+  })
+  const bindGroupLayout = device.createBindGroupLayout({
+    entries: [
+      {
+        binding: 0,
+        visibility: GPUShaderStage.COMPUTE,
+        buffer: { type: 'read-only-storage' },
+      },
+      {
+        binding: 1,
+        visibility: GPUShaderStage.COMPUTE,
+        buffer: { type: 'storage' },
+      },
+    ],
+  })
+  const bindGroup = device.createBindGroup({
+    layout: bindGroupLayout,
+    entries: [
+      { binding: 0, resource: { buffer: inputBuffer } },
+      { binding: 1, resource: { buffer: outputBuffer } },
+    ],
+  })
+  const pipelineLayout = device.createPipelineLayout({
+    bindGroupLayouts: [bindGroupLayout],
+  })
+  const pipeline = device.createComputePipeline({
+    layout: pipelineLayout,
+    compute: { module, entryPoint: 'main' },
+  })
+
+  const sumReduction = async (): Promise<SumResult> => {
+    const start = performance.now()
+
+    const encoder = device.createCommandEncoder()
+
+    const pass = encoder.beginComputePass()
+    pass.setPipeline(pipeline)
+    pass.setBindGroup(0, bindGroup)
+    pass.dispatchWorkgroups(workgroupCountX, workgroupCountY)
+    pass.end()
+
+    encoder.copyBufferToBuffer(outputBuffer, 0, stagingBuffer, 0, 4)
+
+    const commands = encoder.finish()
+    device.queue.submit([commands])
+
+    await stagingBuffer.mapAsync(GPUMapMode.READ)
+
+    const stagingData = new Int32Array(stagingBuffer.getMappedRange())
+    const result = stagingData[0]
+    stagingBuffer.unmap()
+
+    const time = performance.now() - start
+
+    return { result, time }
+  }
+
+  return sumReduction
+}
+
 type RunLimitType = 'count' | 'duration'
 
 const searchParams = new URLSearchParams(location.search)
@@ -189,7 +304,7 @@ const bindElement = (
 
 const waitForUIUpdate = () => new Promise((resolve) => setTimeout(resolve, 10))
 
-const setups = [setupSumCPU, setupSumSequential]
+const setups = [setupSumCPU, setupSumSequential, setupSumReduction]
 
 const initTable = () => {
   const { minIntCount, maxIntCount } = params
