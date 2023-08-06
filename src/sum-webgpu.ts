@@ -9,24 +9,27 @@ if (!adapter) {
 }
 const device = await adapter.requestDevice()
 
-const time = (label = 'time') => console.time(label)
-const timeEnd = (label = 'time') => console.timeEnd(label)
-
 const generateInput = (count: number) => {
-  time(generateInput.name)
+  const start = performance.now()
   const input = Int32Array.from({ length: count }, () =>
     Math.round(Math.random() * 10),
   )
-  timeEnd(generateInput.name)
+  const time = performance.now() - start
+  console.log(`${generateInput.name}: ${time} ms`)
   return input
 }
 
+type SumResult = {
+  result: number
+  time: number
+}
+
 const setupSumCPU = (input: Int32Array) => {
-  const sumCPU = () => {
-    time()
+  const sumCPU = (): SumResult => {
+    const start = performance.now()
     const result = input.reduce((a, b) => a + b)
-    timeEnd()
-    return result
+    const time = performance.now() - start
+    return { result, time }
   }
 
   return sumCPU
@@ -95,8 +98,8 @@ const setupSumSequential = async (input: Int32Array) => {
     compute: { module, entryPoint: 'main' },
   })
 
-  const sumSequential = async () => {
-    time()
+  const sumSequential = async (): Promise<SumResult> => {
+    const start = performance.now()
 
     const encoder = device.createCommandEncoder()
 
@@ -117,9 +120,9 @@ const setupSumSequential = async (input: Int32Array) => {
     const result = stagingData[0]
     stagingBuffer.unmap()
 
-    timeEnd()
+    const time = performance.now() - start
 
-    return result
+    return { result, time }
   }
 
   return sumSequential
@@ -184,7 +187,7 @@ const bindElement = (
   }
 }
 
-const waitForUIUpdate = () => new Promise((resolve) => setTimeout(resolve))
+const waitForUIUpdate = () => new Promise((resolve) => setTimeout(resolve, 10))
 
 const setups = [setupSumCPU, setupSumSequential]
 
@@ -252,40 +255,78 @@ bindElement(
 )
 
 document.querySelector('button')!.onclick = async () => {
-  document
-    .querySelectorAll('td[id]')
-    .forEach((cell) => (cell.textContent = 'pending...'))
+  document.querySelectorAll('td[id]').forEach((cell) => {
+    cell.className = ''
+    cell.textContent = 'pending...'
+  })
   await waitForUIUpdate()
 
   const { minIntCount, maxIntCount, runLimit, runLimitType } = params
   for (let count = minIntCount; count <= maxIntCount; count *= 2) {
     console.group(`${formatIntCount(count)} ints`)
     const input = generateInput(count)
+    const means: Record<string, number> = {}
     for (const setupSum of setups) {
       const sum = await setupSum(input)
 
-      const cell = document.getElementById(`${sum.name}-${count}`)!
+      const id = `${sum.name}-${count}`
+
+      const cell = document.getElementById(id)!
       cell.textContent = 'running...'
       await waitForUIUpdate()
 
       console.group(sum.name)
-      let result
+      let latestResult: number | undefined
+      let timeSum = 0
+      let runCount = 0
       if (runLimitType === 'count') {
         for (let i = 0; i < runLimit; i++) {
-          result = await sum()
+          const { result, time } = await sum()
+          console.log(`time: ${time} ms`)
+          latestResult = result
+          timeSum += time
+          runCount++
         }
       } else {
         const start = performance.now()
         while (performance.now() - start < runLimit) {
-          result = await sum()
+          const { result, time } = await sum()
+          console.log(`time: ${time} ms`)
+          latestResult = result
+          timeSum += time
+          runCount++
         }
       }
-      console.log(`result: ${result}`)
+      console.log(`result: ${latestResult}`)
       console.groupEnd()
 
       cell.textContent = 'completed'
       await waitForUIUpdate()
+
+      means[`${sum.name}-${count}`] = timeSum / runCount
     }
     console.groupEnd()
+
+    let fastest = ''
+    let fastestTime = Infinity
+    let slowest = ''
+    let slowestTime = -Infinity
+    for (const [id, mean] of Object.entries(means)) {
+      if (mean < fastestTime) {
+        fastest = id
+        fastestTime = mean
+      }
+      if (mean > slowestTime) {
+        slowest = id
+        slowestTime = mean
+      }
+      document.getElementById(id)!.textContent = `${mean.toLocaleString(
+        'en-US',
+        { maximumFractionDigits: 3 },
+      )} ms`
+    }
+    document.getElementById(fastest)!.classList.add('result__cell--fastest')
+    document.getElementById(slowest)!.classList.add('result__cell--slowest')
+    await waitForUIUpdate()
   }
 }
