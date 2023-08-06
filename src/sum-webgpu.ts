@@ -151,6 +151,22 @@ const superscripts: Record<string, string> = {
   '9': '⁹',
 }
 
+const formatIntCount = (count: number) => {
+  return `${count} (2${[...String(Math.log2(count))]
+    .map((value) => superscripts[value])
+    .join('')})`
+}
+
+const populateIntCountOptions = (selectElement: HTMLSelectElement) => {
+  for (let i = 2; i <= 26; i++) {
+    const count = 2 ** i
+    const option = document.createElement('option')
+    option.value = String(count)
+    option.textContent = formatIntCount(count)
+    selectElement.appendChild(option)
+  }
+}
+
 const bindElement = (
   element: HTMLInputElement | HTMLSelectElement,
   paramName: ParamName,
@@ -170,7 +186,7 @@ const bindElement = (
 
 const setups = [setupSumCPU, setupSumSequential]
 
-const updateTable = () => {
+const initTable = () => {
   const { minIntCount, maxIntCount } = params
 
   const intCountHeader = document.querySelector<HTMLTableCellElement>(
@@ -185,9 +201,7 @@ const updateTable = () => {
   intCountValuesChildren.push(document.createElement('th'))
   for (let count = minIntCount; count <= maxIntCount; count *= 2) {
     const headerCell = document.createElement('th')
-    headerCell.textContent = `${count} (2${[...String(Math.log2(count))]
-      .map((value) => superscripts[value])
-      .join('')})`
+    headerCell.textContent = formatIntCount(count)
     intCountValuesChildren.push(headerCell)
   }
   intCountValues.replaceChildren(...intCountValuesChildren)
@@ -196,9 +210,11 @@ const updateTable = () => {
   const tableRows: HTMLTableRowElement[] = []
   for (const setupSum of setups) {
     const row = document.createElement('tr')
+
     const dataCell = document.createElement('td')
     dataCell.textContent = setupSum.name.replace('setupS', 's')
     row.appendChild(dataCell)
+
     for (let count = minIntCount; count <= maxIntCount; count *= 2) {
       const dataCell = document.createElement('td')
       dataCell.textContent = 'ready'
@@ -209,31 +225,17 @@ const updateTable = () => {
   tableBody.replaceChildren(...tableRows)
 }
 
-updateTable()
+initTable()
 
 const minIntCountElement =
   document.querySelector<HTMLSelectElement>('[name=minIntCount]')!
-for (let i = 2; i <= 26; i++) {
-  const option = document.createElement('option')
-  option.value = `${2 ** i}`
-  option.textContent = `${2 ** i} (2${[...String(i)]
-    .map((value) => superscripts[value])
-    .join('')})`
-  minIntCountElement.appendChild(option)
-}
-bindElement(minIntCountElement, 'minIntCount', updateTable)
+populateIntCountOptions(minIntCountElement)
+bindElement(minIntCountElement, 'minIntCount', initTable)
 
 const maxIntCountElement =
   document.querySelector<HTMLSelectElement>('[name=maxIntCount]')!
-for (let i = 2; i <= 26; i++) {
-  const option = document.createElement('option')
-  option.value = `${2 ** i}`
-  option.textContent = `${2 ** i} (2${[...String(i)]
-    .map((value) => superscripts[value])
-    .join('')})`
-  maxIntCountElement.appendChild(option)
-}
-bindElement(maxIntCountElement, 'maxIntCount', updateTable)
+populateIntCountOptions(maxIntCountElement)
+bindElement(maxIntCountElement, 'maxIntCount', initTable)
 
 bindElement(
   document.querySelector<HTMLInputElement>('[name=runLimit]')!,
@@ -247,7 +249,7 @@ bindElement(
 document.querySelector('button')!.onclick = async () => {
   const { minIntCount, maxIntCount, runLimit, runLimitType } = params
   for (let count = minIntCount; count <= maxIntCount; count *= 2) {
-    console.group(`${count} ints`)
+    console.group(`${formatIntCount(count)} ints`)
     const input = generateInput(count)
     for (const setupSum of setups) {
       const sum = await setupSum(input)
