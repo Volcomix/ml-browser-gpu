@@ -184,6 +184,8 @@ const bindElement = (
   }
 }
 
+const waitForUIUpdate = () => new Promise((resolve) => setTimeout(resolve))
+
 const setups = [setupSumCPU, setupSumSequential]
 
 const initTable = () => {
@@ -209,14 +211,17 @@ const initTable = () => {
   const tableBody = document.querySelector('tbody')!
   const tableRows: HTMLTableRowElement[] = []
   for (const setupSum of setups) {
+    const sumName = setupSum.name.replace('setupS', 's')
+
     const row = document.createElement('tr')
 
     const dataCell = document.createElement('td')
-    dataCell.textContent = setupSum.name.replace('setupS', 's')
+    dataCell.textContent = sumName
     row.appendChild(dataCell)
 
     for (let count = minIntCount; count <= maxIntCount; count *= 2) {
       const dataCell = document.createElement('td')
+      dataCell.id = `${sumName}-${count}`
       dataCell.textContent = 'ready'
       row.appendChild(dataCell)
     }
@@ -247,12 +252,22 @@ bindElement(
 )
 
 document.querySelector('button')!.onclick = async () => {
+  document
+    .querySelectorAll('td[id]')
+    .forEach((cell) => (cell.textContent = 'pending...'))
+  await waitForUIUpdate()
+
   const { minIntCount, maxIntCount, runLimit, runLimitType } = params
   for (let count = minIntCount; count <= maxIntCount; count *= 2) {
     console.group(`${formatIntCount(count)} ints`)
     const input = generateInput(count)
     for (const setupSum of setups) {
       const sum = await setupSum(input)
+
+      const cell = document.getElementById(`${sum.name}-${count}`)!
+      cell.textContent = 'running...'
+      await waitForUIUpdate()
+
       console.group(sum.name)
       let result
       if (runLimitType === 'count') {
@@ -267,6 +282,9 @@ document.querySelector('button')!.onclick = async () => {
       }
       console.log(`result: ${result}`)
       console.groupEnd()
+
+      cell.textContent = 'completed'
+      await waitForUIUpdate()
     }
     console.groupEnd()
   }
