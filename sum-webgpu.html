@@ -7,8 +7,17 @@
     <title>ML Browser GPU - Sum WebGPU</title>
   </head>
   <body>
-    <label>Min number of ints<select name="minCount"></select></label>
-    <label>Max number of ints<select name="maxCount"></select></label>
+    <label>Min number of ints<select name="minIntCount"></select></label>
+    <label>Max number of ints<select name="maxIntCount"></select></label>
+    <label>
+      Run limit
+      <input name="runLimit" type="number" min="0" />
+      <select name="runLimitType">
+        <option value="count">iterations</option>
+        <option value="duration">ms</option>
+      </select>
+    </label>
+    <button>Run</button>
     <script type="module" src="/src/sum-webgpu.ts"></script>
   </body>
 </html>

@@ -125,9 +125,18 @@ const setupSumSequential = async (input: Int32Array) => {
   return sumSequential
 }
 
+type RunLimitType = 'count' | 'duration'
+
 const searchParams = new URLSearchParams(location.search)
-let minCount = Number(searchParams.get('minCount') ?? 64)
-let maxCount = Number(searchParams.get('maxCount') ?? 2 ** 22)
+
+const params = {
+  minIntCount: Number(searchParams.get('minIntCount') ?? 64),
+  maxIntCount: Number(searchParams.get('maxIntCount') ?? 2 ** 22),
+  runLimit: Number(searchParams.get('runLimit') ?? 10),
+  runLimitType: searchParams.get('runLimitType') ?? ('count' as RunLimitType),
+}
+
+type ParamName = keyof typeof params
 
 const superscripts: Record<string, string> = {
   '0': '⁰',
@@ -142,54 +151,77 @@ const superscripts: Record<string, string> = {
   '9': '⁹',
 }
 
-const minCountElement =
-  document.querySelector<HTMLSelectElement>('[name=minCount]')!
+const bindElement = (
+  element: HTMLInputElement | HTMLSelectElement,
+  paramName: ParamName,
+) => {
+  const value = params[paramName]
+  element.value = typeof value === 'string' ? value : String(value)
+  element.onchange = () => {
+    ;(params[paramName] as typeof value) =
+      typeof value === 'string' ? element.value : Number(element.value)
+    const searchParams = new URLSearchParams(location.search)
+    searchParams.set(paramName, element.value)
+    history.replaceState(null, '', `?${searchParams}`)
+  }
+}
+
+const minIntCountElement =
+  document.querySelector<HTMLSelectElement>('[name=minIntCount]')!
 for (let i = 2; i <= 26; i++) {
   const option = document.createElement('option')
   option.value = `${2 ** i}`
   option.innerHTML = `${2 ** i} (2${[...String(i)]
     .map((value) => superscripts[value])
     .join('')})`
-  minCountElement.appendChild(option)
+  minIntCountElement.appendChild(option)
 }
-minCountElement.value = String(minCount)
-minCountElement.onchange = () => {
-  minCount = Number(minCountElement.value)
-  const searchParams = new URLSearchParams(location.search)
-  searchParams.set('minCount', String(minCount))
-  history.replaceState(null, '', `?${searchParams}`)
-}
+bindElement(minIntCountElement, 'minIntCount')
 
-const maxCountElement =
-  document.querySelector<HTMLSelectElement>('[name=maxCount]')!
+const maxIntCountElement =
+  document.querySelector<HTMLSelectElement>('[name=maxIntCount]')!
 for (let i = 2; i <= 26; i++) {
   const option = document.createElement('option')
   option.value = `${2 ** i}`
   option.innerHTML = `${2 ** i} (2${[...String(i)]
     .map((value) => superscripts[value])
     .join('')})`
-  maxCountElement.appendChild(option)
+  maxIntCountElement.appendChild(option)
 }
-maxCountElement.value = String(maxCount)
-maxCountElement.onchange = () => {
-  maxCount = Number(maxCountElement.value)
-  const searchParams = new URLSearchParams(location.search)
-  searchParams.set('maxCount', String(maxCount))
-  history.replaceState(null, '', `?${searchParams}`)
-}
+bindElement(maxIntCountElement, 'maxIntCount')
 
-for (let count = minCount; count <= maxCount; count *= 2) {
-  console.group(`${count} ints`)
-  const input = generateInput(count)
-  for (const setupSum of [setupSumCPU, setupSumSequential]) {
-    const sum = await setupSum(input)
-    console.group(sum.name)
-    let result
-    for (let i = 0; i < 10; i++) {
-      result = await sum()
+bindElement(
+  document.querySelector<HTMLInputElement>('[name=runLimit]')!,
+  'runLimit',
+)
+bindElement(
+  document.querySelector<HTMLSelectElement>('[name=runLimitType')!,
+  'runLimitType',
+)
+
+const button = document.querySelector('button')!
+button.onclick = async () => {
+  const { minIntCount, maxIntCount, runLimit, runLimitType } = params
+  for (let count = minIntCount; count <= maxIntCount; count *= 2) {
+    console.group(`${count} ints`)
+    const input = generateInput(count)
+    for (const setupSum of [setupSumCPU, setupSumSequential]) {
+      const sum = await setupSum(input)
+      console.group(sum.name)
+      let result
+      if (runLimitType === 'count') {
+        for (let i = 0; i < runLimit; i++) {
+          result = await sum()
+        }
+      } else {
+        const start = performance.now()
+        while (performance.now() - start < runLimit) {
+          result = await sum()
+        }
+      }
+      console.log(`result: ${result}`)
+      console.groupEnd()
     }
-    console.log(`result: ${result}`)
     console.groupEnd()
   }
-  console.groupEnd()
 }
