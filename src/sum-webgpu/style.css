@@ -32,6 +32,7 @@ header {
 label {
   display: grid;
   grid-auto-flow: column;
+  align-items: center;
 
   > :first-child {
     margin-left: 8px;
@@ -42,12 +43,29 @@ input {
   text-align: right;
 }
 
+select,
+input,
+button {
+  border: none;
+  background-color: #2a2a2a;
+  padding: 4px 6px;
+  border-radius: 6px;
+  outline: none;
+  transition: background-color 100ms;
+
+  &:hover {
+    background-color: #373737;
+  }
+}
+
 input + select {
   margin-left: 4px;
 }
 
 button {
   margin-left: auto;
+  padding: 4px 12px;
+  cursor: pointer;
 }
 
 table {
