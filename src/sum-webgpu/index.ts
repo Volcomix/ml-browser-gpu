@@ -129,7 +129,9 @@ const setupSumSequential = async (input: Int32Array) => {
 }
 
 const setupSumReduction = async (input: Int32Array) => {
-  let workgroupCountX = input.length / 64
+  const workgroupSize = 64
+
+  let workgroupCountX = input.length / workgroupSize
   let workgroupCountY = 1
   while (workgroupCountX > 65535) {
     workgroupCountX /= 2
@@ -144,9 +146,9 @@ const setupSumReduction = async (input: Int32Array) => {
       @group(0) @binding(1)
       var<storage, read_write> output: array<u32>;
 
-      var<workgroup> sharedData: array<u32, 64>;
+      var<workgroup> sharedData: array<u32, ${workgroupSize}>;
 
-      @compute @workgroup_size(64)
+      @compute @workgroup_size(${workgroupSize})
       fn main(
         @builtin(global_invocation_id)
         globalId: vec3u,
@@ -154,14 +156,14 @@ const setupSumReduction = async (input: Int32Array) => {
         @builtin(local_invocation_id)
         localId: vec3u,
       ) {
-        let i = globalId.x + globalId.y * ${workgroupCountX * 64}u;
+        let i = globalId.x + globalId.y * ${workgroupCountX * workgroupSize}u;
         
         sharedData[localId.x] = input[i];
         workgroupBarrier();
 
         if (localId.x == 0u) {
           var sum = 0u;
-          for (var j = 0u; j < 64u; j++) {
+          for (var j = 0u; j < ${workgroupSize}u; j++) {
             sum += sharedData[localId.x + j];
           }
           output[0] = sum;
