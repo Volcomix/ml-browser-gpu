@@ -157,16 +157,19 @@ const setupSumReduction = async (input: Int32Array) => {
         localId: vec3u,
       ) {
         let i = globalId.x + globalId.y * ${workgroupCountX * workgroupSize}u;
-        
+        let workgroupId = i / ${workgroupSize}u;
         sharedData[localId.x] = input[i];
         workgroupBarrier();
 
-        if (localId.x == 0u) {
-          var sum = 0u;
-          for (var j = 0u; j < ${workgroupSize}u; j++) {
-            sum += sharedData[localId.x + j];
+        for (var stride = 1u; stride < ${workgroupSize}u; stride *= 2u) {
+          if (localId.x % (2u * stride) == 0u) {
+            sharedData[localId.x] += sharedData[localId.x + stride];
           }
-          output[0] = sum;
+          workgroupBarrier();
+        }
+
+        if (localId.x == 0u) {
+          output[workgroupId] = sharedData[0];
         }
       }
     `,
