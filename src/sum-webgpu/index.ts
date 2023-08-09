@@ -154,14 +154,14 @@ const setupSumReduction = async (input: Int32Array) => {
         @builtin(local_invocation_id)
         localId: vec3u,
       ) {
-        let i = globalId.x + globalId.y * ${workgroupCountX * 64};
+        let i = globalId.x + globalId.y * ${workgroupCountX * 64}u;
         
         sharedData[localId.x] = input[i];
         workgroupBarrier();
 
-        if (localId.x == 0) {
+        if (localId.x == 0u) {
           var sum = 0u;
-          for (var j = 0u; j < 64; j++) {
+          for (var j = 0u; j < 64u; j++) {
             sum += sharedData[localId.x + j];
           }
           output[0] = sum;
@@ -378,7 +378,9 @@ document.querySelector('button')!.onclick = async () => {
 
   const { minIntCount, maxIntCount, runLimit, runLimitType } = params
   for (let count = minIntCount; count <= maxIntCount; count *= 2) {
-    console.group(`${formatIntCount(count)} ints`)
+    console.groupCollapsed(`${formatIntCount(count)} ints`)
+
+    let firstResult: number | undefined
     const input = generateInput(count)
     const means: Record<string, number> = {}
     for (const setupSum of setups) {
@@ -390,7 +392,7 @@ document.querySelector('button')!.onclick = async () => {
       cell.textContent = 'running...'
       await waitForUIUpdate()
 
-      console.group(sum.name)
+      console.groupCollapsed(sum.name)
       let latestResult: number | undefined
       let timeSum = 0
       let runCount = 0
@@ -415,10 +417,17 @@ document.querySelector('button')!.onclick = async () => {
       console.log(`result: ${latestResult}`)
       console.groupEnd()
 
-      cell.textContent = 'completed'
+      if (firstResult === undefined) {
+        firstResult = latestResult
+      }
+      if (latestResult === firstResult) {
+        means[`${sum.name}-${count}`] = timeSum / runCount
+        cell.textContent = 'completed'
+      } else {
+        cell.textContent = 'ERROR'
+        cell.classList.add('result__cell--error')
+      }
       await waitForUIUpdate()
-
-      means[`${sum.name}-${count}`] = timeSum / runCount
     }
     console.groupEnd()
 
@@ -427,6 +436,9 @@ document.querySelector('button')!.onclick = async () => {
     let slowest = ''
     let slowestTime = -Infinity
     for (const [id, mean] of Object.entries(means)) {
+      if (mean === undefined) {
+        continue
+      }
       if (mean < fastestTime) {
         fastest = id
         fastestTime = mean
@@ -440,8 +452,12 @@ document.querySelector('button')!.onclick = async () => {
         { maximumFractionDigits: 3 },
       )} ms`
     }
-    document.getElementById(fastest)!.classList.add('result__cell--fastest')
-    document.getElementById(slowest)!.classList.add('result__cell--slowest')
+    if (fastest) {
+      document.getElementById(fastest)!.classList.add('result__cell--fastest')
+    }
+    if (slowest) {
+      document.getElementById(slowest)!.classList.add('result__cell--slowest')
+    }
     await waitForUIUpdate()
   }
 }
