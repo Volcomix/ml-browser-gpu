@@ -90,11 +90,15 @@ td {
     color: rgba(255, 255, 255, 0.87);
   }
 
+  &.result__cell--slowest {
+    color: rgb(255, 110, 141);
+  }
+
   &.result__cell--fastest {
     color: rgb(119, 243, 135);
   }
 
-  &.result__cell--slowest {
-    color: rgb(255, 110, 141);
+  &.result__cell--error {
+    color: rgb(255, 99, 99);
   }
 }
