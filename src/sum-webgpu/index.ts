@@ -150,26 +150,26 @@ const setupSumReduction = async (input: Int32Array) => {
 
       @compute @workgroup_size(${workgroupSize})
       fn main(
-        @builtin(global_invocation_id)
-        globalId: vec3u,
+        @builtin(workgroup_id)
+        workgroupId: vec3u,
 
-        @builtin(local_invocation_id)
-        localId: vec3u,
+        @builtin(local_invocation_index)
+        localIndex: u32,
       ) {
-        let i = globalId.x + globalId.y * ${workgroupCountX * workgroupSize}u;
-        let workgroupId = i / ${workgroupSize}u;
-        sharedData[localId.x] = input[i];
+        let workgroupIndex = workgroupId.x + workgroupId.y * ${workgroupCountX}u;
+        let i = workgroupIndex * ${workgroupSize}u + localIndex;
+        sharedData[localIndex] = input[i];
         workgroupBarrier();
 
         for (var stride = 1u; stride < ${workgroupSize}u; stride *= 2u) {
-          if (localId.x % (2u * stride) == 0u) {
-            sharedData[localId.x] += sharedData[localId.x + stride];
+          if (localIndex % (2u * stride) == 0u) {
+            sharedData[localIndex] += sharedData[localIndex + stride];
           }
           workgroupBarrier();
         }
 
-        if (localId.x == 0u) {
-          output[workgroupId] = sharedData[0];
+        if (localIndex == 0u) {
+          output[workgroupIndex] = sharedData[0];
         }
       }
     `,
