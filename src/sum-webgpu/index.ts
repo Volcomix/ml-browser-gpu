@@ -137,6 +137,7 @@ const setupSumReduction = async (input: Int32Array) => {
     workgroupCountX /= 2
     workgroupCountY *= 2
   }
+  const workgroupCount = workgroupCountX * workgroupCountY
 
   const module = device.createShaderModule({
     code: /* wgsl */ `
@@ -181,10 +182,12 @@ const setupSumReduction = async (input: Int32Array) => {
   })
   device.queue.writeBuffer(inputBuffer, 0, input)
 
-  const outputBuffer = device.createBuffer({
-    size: 4,
-    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
-  })
+  const outputBuffers = Array.from({ length: 2 }, () =>
+    device.createBuffer({
+      size: workgroupCount * 4,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+    }),
+  )
   const stagingBuffer = device.createBuffer({
     size: 4,
     usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
@@ -203,13 +206,15 @@ const setupSumReduction = async (input: Int32Array) => {
       },
     ],
   })
-  const bindGroup = device.createBindGroup({
-    layout: bindGroupLayout,
-    entries: [
-      { binding: 0, resource: { buffer: inputBuffer } },
-      { binding: 1, resource: { buffer: outputBuffer } },
-    ],
-  })
+  const bindGroups = Array.from({ length: 2 }, (_, i) =>
+    device.createBindGroup({
+      layout: bindGroupLayout,
+      entries: [
+        { binding: 0, resource: { buffer: inputBuffer } },
+        { binding: 1, resource: { buffer: outputBuffers[i] } },
+      ],
+    }),
+  )
   const pipelineLayout = device.createPipelineLayout({
     bindGroupLayouts: [bindGroupLayout],
   })
@@ -225,11 +230,11 @@ const setupSumReduction = async (input: Int32Array) => {
 
     const pass = encoder.beginComputePass()
     pass.setPipeline(pipeline)
-    pass.setBindGroup(0, bindGroup)
+    pass.setBindGroup(0, bindGroups[0])
     pass.dispatchWorkgroups(workgroupCountX, workgroupCountY)
     pass.end()
 
-    encoder.copyBufferToBuffer(outputBuffer, 0, stagingBuffer, 0, 4)
+    encoder.copyBufferToBuffer(outputBuffers[0], 0, stagingBuffer, 0, 4)
 
     const commands = encoder.finish()
     device.queue.submit([commands])
