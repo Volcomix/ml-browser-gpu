@@ -139,13 +139,25 @@ const setupSumReduction = async (input: Int32Array) => {
   }
   const workgroupCount = workgroupCountX * workgroupCountY
 
-  const module = device.createShaderModule({
+  const clearModule = device.createShaderModule({
+    code: /* wgsl */ `
+      @group(0) @binding(0)
+      var<storage, read_write> output: u32;
+
+      @compute @workgroup_size(1)
+      fn main() {
+        output = 0;
+      }
+    `,
+  })
+
+  const sumModule = device.createShaderModule({
     code: /* wgsl */ `
       @group(0) @binding(0)
       var<storage> input: array<u32>;
 
       @group(0) @binding(1)
-      var<storage, read_write> output: array<u32>;
+      var<storage, read_write> output: atomic<u32>;
 
       var<workgroup> sharedData: array<u32, ${workgroupSize}>;
 
@@ -162,15 +174,15 @@ const setupSumReduction = async (input: Int32Array) => {
         sharedData[localIndex] = input[i];
         workgroupBarrier();
 
-        for (var stride = 1u; stride < ${workgroupSize}u; stride *= 2u) {
-          if (localIndex % (2u * stride) == 0u) {
+        for (var stride = ${workgroupSize}u / 2u; stride > 0u; stride >>= 1u) {
+          if (localIndex < stride) {
             sharedData[localIndex] += sharedData[localIndex + stride];
           }
           workgroupBarrier();
         }
 
         if (localIndex == 0u) {
-          output[workgroupIndex] = sharedData[0];
+          atomicAdd(&output, sharedData[0]);
         }
       }
     `,
@@ -182,17 +194,38 @@ const setupSumReduction = async (input: Int32Array) => {
   })
   device.queue.writeBuffer(inputBuffer, 0, input)
 
-  const outputBuffers = Array.from({ length: 2 }, () =>
-    device.createBuffer({
-      size: workgroupCount * 4,
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
-    }),
-  )
+  const outputBuffer = device.createBuffer({
+    size: workgroupCount * 4,
+    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+  })
   const stagingBuffer = device.createBuffer({
     size: 4,
     usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
   })
-  const bindGroupLayout = device.createBindGroupLayout({
+
+  // TODO Factorize layout/group/pipeline creation
+  const clearBindGroupLayout = device.createBindGroupLayout({
+    entries: [
+      {
+        binding: 0,
+        visibility: GPUShaderStage.COMPUTE,
+        buffer: { type: 'storage' },
+      },
+    ],
+  })
+  const clearBindGroup = device.createBindGroup({
+    layout: clearBindGroupLayout,
+    entries: [{ binding: 0, resource: { buffer: outputBuffer } }],
+  })
+  const clearPipelineLayout = device.createPipelineLayout({
+    bindGroupLayouts: [clearBindGroupLayout],
+  })
+  const clearPipeline = device.createComputePipeline({
+    layout: clearPipelineLayout,
+    compute: { module: clearModule, entryPoint: 'main' },
+  })
+
+  const sumBindGroupLayout = device.createBindGroupLayout({
     entries: [
       {
         binding: 0,
@@ -206,21 +239,19 @@ const setupSumReduction = async (input: Int32Array) => {
       },
     ],
   })
-  const bindGroups = Array.from({ length: 2 }, (_, i) =>
-    device.createBindGroup({
-      layout: bindGroupLayout,
-      entries: [
-        { binding: 0, resource: { buffer: inputBuffer } },
-        { binding: 1, resource: { buffer: outputBuffers[i] } },
-      ],
-    }),
-  )
-  const pipelineLayout = device.createPipelineLayout({
-    bindGroupLayouts: [bindGroupLayout],
+  const sumBindGroup = device.createBindGroup({
+    layout: sumBindGroupLayout,
+    entries: [
+      { binding: 0, resource: { buffer: inputBuffer } },
+      { binding: 1, resource: { buffer: outputBuffer } },
+    ],
   })
-  const pipeline = device.createComputePipeline({
-    layout: pipelineLayout,
-    compute: { module, entryPoint: 'main' },
+  const sumPipelineLayout = device.createPipelineLayout({
+    bindGroupLayouts: [sumBindGroupLayout],
+  })
+  const sumPipeline = device.createComputePipeline({
+    layout: sumPipelineLayout,
+    compute: { module: sumModule, entryPoint: 'main' },
   })
 
   const sumReduction = async (): Promise<SumResult> => {
@@ -228,13 +259,19 @@ const setupSumReduction = async (input: Int32Array) => {
 
     const encoder = device.createCommandEncoder()
 
-    const pass = encoder.beginComputePass()
-    pass.setPipeline(pipeline)
-    pass.setBindGroup(0, bindGroups[0])
-    pass.dispatchWorkgroups(workgroupCountX, workgroupCountY)
-    pass.end()
+    const clearPass = encoder.beginComputePass()
+    clearPass.setPipeline(clearPipeline)
+    clearPass.setBindGroup(0, clearBindGroup)
+    clearPass.dispatchWorkgroups(1)
+    clearPass.end()
 
-    encoder.copyBufferToBuffer(outputBuffers[0], 0, stagingBuffer, 0, 4)
+    const sumPass = encoder.beginComputePass()
+    sumPass.setPipeline(sumPipeline)
+    sumPass.setBindGroup(0, sumBindGroup)
+    sumPass.dispatchWorkgroups(workgroupCountX, workgroupCountY)
+    sumPass.end()
+
+    encoder.copyBufferToBuffer(outputBuffer, 0, stagingBuffer, 0, 4)
 
     const commands = encoder.finish()
     device.queue.submit([commands])
