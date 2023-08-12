@@ -535,10 +535,11 @@ type RunLimitType = 'count' | 'duration'
 const searchParams = new URLSearchParams(location.search)
 
 const params = {
-  minIntCount: Number(searchParams.get('minIntCount') ?? 64),
-  maxIntCount: Number(searchParams.get('maxIntCount') ?? 2 ** 22),
-  runLimit: Number(searchParams.get('runLimit') ?? 10),
-  runLimitType: searchParams.get('runLimitType') ?? ('count' as RunLimitType),
+  minIntCount: Number(searchParams.get('minIntCount') ?? 2 ** 17),
+  maxIntCount: Number(searchParams.get('maxIntCount') ?? 2 ** 25),
+  runLimit: Number(searchParams.get('runLimit') ?? 500),
+  runLimitType:
+    searchParams.get('runLimitType') ?? ('duration' as RunLimitType),
 }
 
 type ParamName = keyof typeof params
