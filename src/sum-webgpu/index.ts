@@ -203,7 +203,6 @@ const setupSumReduction = async (input: Int32Array) => {
     usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
   })
 
-  // TODO Factorize layout/group/pipeline creation
   const clearBindGroupLayout = device.createBindGroupLayout({
     entries: [
       {
