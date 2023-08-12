@@ -146,7 +146,7 @@ const setupSumReduction = async (input: Int32Array) => {
 
       @compute @workgroup_size(1)
       fn main() {
-        output = 0;
+        output = 0u;
       }
     `,
   })
