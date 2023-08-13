@@ -195,12 +195,12 @@ const setupSumReduction = async (input: Int32Array) => {
   return sumReduction
 }
 
-const setupSumMulti = async (input: Int32Array) => {
+const setupSumTile = async (input: Int32Array) => {
   const workgroupSize = 64
   const workgroupsPerTile = 32
   const tileSize = workgroupSize * workgroupsPerTile
 
-  let workgroupCountX = input.length / workgroupSize / workgroupsPerTile
+  let workgroupCountX = input.length / tileSize
   let workgroupCountY = 1
   while (workgroupCountX > 65535) {
     workgroupCountX /= 2
@@ -326,7 +326,7 @@ const setupSumMulti = async (input: Int32Array) => {
     compute: { module: sumModule, entryPoint: 'main' },
   })
 
-  const sumMulti = async (): Promise<SumResult> => {
+  const sumTile = async (): Promise<SumResult> => {
     const start = performance.now()
 
     const encoder = device.createCommandEncoder()
@@ -359,7 +359,7 @@ const setupSumMulti = async (input: Int32Array) => {
     return { result, time }
   }
 
-  return sumMulti
+  return sumTile
 }
 
 const setupSumVec = async (input: Int32Array) => {
@@ -367,7 +367,7 @@ const setupSumVec = async (input: Int32Array) => {
   const workgroupsPerTile = 8
   const tileSize = workgroupSize * workgroupsPerTile
 
-  let workgroupCountX = input.length / workgroupSize / workgroupsPerTile / 4
+  let workgroupCountX = input.length / tileSize / 4
   let workgroupCountY = 1
   while (workgroupCountX > 65535) {
     workgroupCountX /= 2
@@ -530,6 +530,148 @@ const setupSumVec = async (input: Int32Array) => {
   return sumVec
 }
 
+const setupSumMulti = async (input: Int32Array) => {
+  const workgroupSize = 64
+  const workgroupsPerTile = 32
+  const tileSize = workgroupSize * workgroupsPerTile
+
+  let workgroupCountX = input.length / tileSize
+  let workgroupCountY = 1
+  while (workgroupCountX > 65535) {
+    workgroupCountX /= 2
+    workgroupCountY *= 2
+  }
+  const workgroupCount = workgroupCountX * workgroupCountY
+
+  const sumModule = device.createShaderModule({
+    code: /* wgsl */ `
+      @group(0) @binding(0)
+      var<storage> input: array<u32>;
+
+      @group(0) @binding(1)
+      var<storage, read_write> output: atomic<u32>;
+
+      var<workgroup> sharedData: array<u32, ${workgroupSize}>;
+
+      @compute @workgroup_size(${workgroupSize})
+      fn main(
+        @builtin(workgroup_id)
+        workgroupId: vec3u,
+
+        @builtin(local_invocation_index)
+        localIndex: u32,
+      ) {
+        let workgroupIndex = workgroupId.x + workgroupId.y * ${workgroupCountX}u;
+        let i = workgroupIndex * ${tileSize}u + localIndex;
+
+        var sum = 0u;
+        for (var j = 0u; j < ${workgroupsPerTile}u; j++) {
+          sum += input[i + j * ${workgroupSize}u];
+        }
+        sharedData[localIndex] = sum;
+        workgroupBarrier();
+
+        for (var stride = ${workgroupSize}u / 2u; stride > 0u; stride >>= 1u) {
+          if (localIndex < stride) {
+            sharedData[localIndex] += sharedData[localIndex + stride];
+          }
+          workgroupBarrier();
+        }
+
+        if (localIndex == 0u) {
+          atomicAdd(&output, sharedData[0]);
+        }
+      }
+    `,
+  })
+
+  const inputBuffer = device.createBuffer({
+    size: input.byteLength,
+    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+  })
+  device.queue.writeBuffer(inputBuffer, 0, input)
+
+  const outputBuffers = Array.from({ length: 2 }, () =>
+    device.createBuffer({
+      size: workgroupCount * 4, // TODO 2nd buffer with 2nd size (way smaller)
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+    }),
+  )
+  const stagingBuffer = device.createBuffer({
+    size: 4,
+    usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
+  })
+
+  const sumBindGroupLayout = device.createBindGroupLayout({
+    entries: [
+      {
+        binding: 0,
+        visibility: GPUShaderStage.COMPUTE,
+        buffer: { type: 'read-only-storage' },
+      },
+      {
+        binding: 1,
+        visibility: GPUShaderStage.COMPUTE,
+        buffer: { type: 'storage' },
+      },
+    ],
+  })
+  const inputBindGroup = device.createBindGroup({
+    layout: sumBindGroupLayout,
+    entries: [
+      { binding: 0, resource: { buffer: inputBuffer } },
+      { binding: 1, resource: { buffer: outputBuffers[0] } },
+    ],
+  })
+  // TODO Use it and remove lint ignore
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const sumBindGroups = Array.from({ length: 2 }, (_, i) =>
+    device.createBindGroup({
+      layout: sumBindGroupLayout,
+      entries: [
+        { binding: 0, resource: { buffer: outputBuffers[i] } },
+        { binding: 1, resource: { buffer: outputBuffers[1 - i] } },
+      ],
+    }),
+  )
+  const sumPipelineLayout = device.createPipelineLayout({
+    bindGroupLayouts: [sumBindGroupLayout],
+  })
+  const sumPipeline = device.createComputePipeline({
+    layout: sumPipelineLayout,
+    compute: { module: sumModule, entryPoint: 'main' },
+  })
+
+  const sumMulti = async (): Promise<SumResult> => {
+    const start = performance.now()
+
+    const encoder = device.createCommandEncoder()
+
+    const sumPass = encoder.beginComputePass()
+    sumPass.setPipeline(sumPipeline)
+    sumPass.setBindGroup(0, inputBindGroup)
+    sumPass.dispatchWorkgroups(workgroupCountX, workgroupCountY)
+    sumPass.end()
+
+    encoder.copyBufferToBuffer(outputBuffers[0], 0, stagingBuffer, 0, 4)
+
+    const commands = encoder.finish()
+    device.queue.submit([commands])
+
+    await stagingBuffer.mapAsync(GPUMapMode.READ)
+
+    const stagingData = new Int32Array(stagingBuffer.getMappedRange())
+    const result = stagingData[0]
+    stagingBuffer.unmap()
+
+    const time = performance.now() - start
+
+    return { result, time }
+  }
+
+  return sumMulti
+}
+
 type RunLimitType = 'count' | 'duration'
 
 const searchParams = new URLSearchParams(location.search)
@@ -592,7 +734,13 @@ const bindElement = (
 
 const waitForUIUpdate = () => new Promise((resolve) => setTimeout(resolve, 10))
 
-const setups = [setupSumCPU, setupSumReduction, setupSumMulti, setupSumVec]
+const setups = [
+  setupSumCPU,
+  setupSumReduction,
+  setupSumTile,
+  setupSumVec,
+  setupSumMulti,
+]
 
 const initTable = () => {
   const { minIntCount, maxIntCount } = params
