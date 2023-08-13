@@ -36,7 +36,7 @@ const setupSumCPU = (input: Int32Array) => {
 }
 
 const setupSumReduction = async (input: Int32Array) => {
-  const workgroupSize = 64
+  const workgroupSize = Math.min(64, input.length)
 
   let workgroupCountX = input.length / workgroupSize
   let workgroupCountY = 1
@@ -196,8 +196,8 @@ const setupSumReduction = async (input: Int32Array) => {
 }
 
 const setupSumTile = async (input: Int32Array) => {
-  const workgroupSize = 64
-  const workgroupsPerTile = 32
+  const workgroupSize = Math.min(64, input.length)
+  const workgroupsPerTile = Math.min(32, input.length / workgroupSize)
   const tileSize = workgroupSize * workgroupsPerTile
 
   let workgroupCountX = input.length / tileSize
@@ -363,8 +363,8 @@ const setupSumTile = async (input: Int32Array) => {
 }
 
 const setupSumVec = async (input: Int32Array) => {
-  const workgroupSize = 64
-  const workgroupsPerTile = 8
+  const workgroupSize = Math.min(64, input.length / 4)
+  const workgroupsPerTile = Math.min(8, input.length / 4 / workgroupSize)
   const tileSize = workgroupSize * workgroupsPerTile
 
   let workgroupCountX = input.length / tileSize / 4
@@ -531,8 +531,8 @@ const setupSumVec = async (input: Int32Array) => {
 }
 
 const setupSumMulti = async (input: Int32Array) => {
-  const workgroupSize = 64
-  const workgroupsPerTile = 32
+  const workgroupSize = Math.min(64, input.length)
+  const workgroupsPerTile = Math.min(32, input.length / workgroupSize)
   const tileSize = workgroupSize * workgroupsPerTile
 
   let workgroupCountX = input.length / tileSize
