@@ -591,9 +591,9 @@ const setupSumMulti = async (input: Int32Array) => {
   })
   device.queue.writeBuffer(inputBuffer, 0, input)
 
-  const outputBuffers = Array.from({ length: 2 }, () =>
+  const outputBuffers = Array.from({ length: 2 }, (_, i) =>
     device.createBuffer({
-      size: workgroupCount * 4, // TODO 2nd buffer with 2nd size (way smaller)
+      size: (workgroupCount * 4) / Math.max(1, tileSize * i),
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
     }),
   )
