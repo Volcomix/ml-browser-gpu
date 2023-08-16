@@ -531,6 +531,40 @@ const setupSumVec = async (input: Int32Array) => {
 }
 
 const setupSumMulti = async (input: Int32Array) => {
+  {
+    const maxWorkgroupSize = 64
+    const maxWorkgroupsPerTile = 32
+
+    let count = input.length
+    while (count > 1) {
+      const workgroupSize = Math.min(maxWorkgroupSize, count)
+      const workgroupsPerTile = Math.min(
+        maxWorkgroupsPerTile,
+        count / workgroupSize,
+      )
+      const tileSize = workgroupSize * workgroupsPerTile
+
+      let workgroupCountX = count / tileSize
+      let workgroupCountY = 1
+      while (workgroupCountX > 65535) {
+        workgroupCountX /= 2
+        workgroupCountY *= 2
+      }
+      const workgroupCount = workgroupCountX * workgroupCountY
+
+      console.log({
+        workgroupSize,
+        workgroupsPerTile,
+        tileSize,
+        workgroupCountX,
+        workgroupCountY,
+        workgroupCount,
+      })
+
+      count = workgroupCount
+    }
+  }
+
   const workgroupSize = Math.min(64, input.length)
   const workgroupsPerTile = Math.min(32, input.length / workgroupSize)
   const tileSize = workgroupSize * workgroupsPerTile
