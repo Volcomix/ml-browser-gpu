@@ -530,94 +530,81 @@ const setupSumVec = async (input: Int32Array) => {
   return sumVec
 }
 
+type SumPass = {
+  module: GPUShaderModule
+  workgroupCount: number
+  workgroupCountX: number
+  workgroupCountY: number
+}
+
 const setupSumMulti = async (input: Int32Array) => {
-  {
-    const maxWorkgroupSize = 64
-    const maxWorkgroupsPerTile = 32
+  const maxWorkgroupSize = 64
+  const maxWorkgroupsPerTile = 32
 
-    let count = input.length
-    while (count > 1) {
-      const workgroupSize = Math.min(maxWorkgroupSize, count)
-      const workgroupsPerTile = Math.min(
-        maxWorkgroupsPerTile,
-        count / workgroupSize,
-      )
-      const tileSize = workgroupSize * workgroupsPerTile
+  const passes: SumPass[] = []
 
-      let workgroupCountX = count / tileSize
-      let workgroupCountY = 1
-      while (workgroupCountX > 65535) {
-        workgroupCountX /= 2
-        workgroupCountY *= 2
-      }
-      const workgroupCount = workgroupCountX * workgroupCountY
+  let workgroupCount = input.length
+  while (workgroupCount > 1) {
+    const workgroupSize = Math.min(maxWorkgroupSize, workgroupCount)
+    const workgroupsPerTile = Math.min(
+      maxWorkgroupsPerTile,
+      workgroupCount / workgroupSize,
+    )
+    const tileSize = workgroupSize * workgroupsPerTile
 
-      console.log({
-        workgroupSize,
-        workgroupsPerTile,
-        tileSize,
-        workgroupCountX,
-        workgroupCountY,
-        workgroupCount,
-      })
-
-      count = workgroupCount
+    let workgroupCountX = workgroupCount / tileSize
+    let workgroupCountY = 1
+    while (workgroupCountX > 65535) {
+      workgroupCountX /= 2
+      workgroupCountY *= 2
     }
-  }
+    workgroupCount = workgroupCountX * workgroupCountY
 
-  const workgroupSize = Math.min(64, input.length)
-  const workgroupsPerTile = Math.min(32, input.length / workgroupSize)
-  const tileSize = workgroupSize * workgroupsPerTile
+    const module = device.createShaderModule({
+      code: /* wgsl */ `
+        @group(0) @binding(0)
+        var<storage> input: array<u32>;
 
-  let workgroupCountX = input.length / tileSize
-  let workgroupCountY = 1
-  while (workgroupCountX > 65535) {
-    workgroupCountX /= 2
-    workgroupCountY *= 2
-  }
-  const workgroupCount = workgroupCountX * workgroupCountY
+        @group(0) @binding(1)
+        var<storage, read_write> output: array<u32>;
 
-  const sumModule = device.createShaderModule({
-    code: /* wgsl */ `
-      @group(0) @binding(0)
-      var<storage> input: array<u32>;
+        var<workgroup> sharedData: array<u32, ${workgroupSize}>;
 
-      @group(0) @binding(1)
-      var<storage, read_write> output: atomic<u32>;
+        @compute @workgroup_size(${workgroupSize})
+        fn main(
+          @builtin(workgroup_id)
+          workgroupId: vec3u,
 
-      var<workgroup> sharedData: array<u32, ${workgroupSize}>;
+          @builtin(local_invocation_index)
+          localIndex: u32,
+        ) {
+          let workgroupIndex = workgroupId.x + workgroupId.y * ${workgroupCountX}u;
+          let i = workgroupIndex * ${tileSize}u + localIndex;
 
-      @compute @workgroup_size(${workgroupSize})
-      fn main(
-        @builtin(workgroup_id)
-        workgroupId: vec3u,
-
-        @builtin(local_invocation_index)
-        localIndex: u32,
-      ) {
-        let workgroupIndex = workgroupId.x + workgroupId.y * ${workgroupCountX}u;
-        let i = workgroupIndex * ${tileSize}u + localIndex;
-
-        var sum = 0u;
-        for (var j = 0u; j < ${workgroupsPerTile}u; j++) {
-          sum += input[i + j * ${workgroupSize}u];
-        }
-        sharedData[localIndex] = sum;
-        workgroupBarrier();
-
-        for (var stride = ${workgroupSize}u / 2u; stride > 0u; stride >>= 1u) {
-          if (localIndex < stride) {
-            sharedData[localIndex] += sharedData[localIndex + stride];
+          var sum = 0u;
+          for (var j = 0u; j < ${workgroupsPerTile}u; j++) {
+            sum += input[i + j * ${workgroupSize}u];
           }
+          sharedData[localIndex] = sum;
           workgroupBarrier();
-        }
 
-        if (localIndex == 0u) {
-          atomicAdd(&output, sharedData[0]);
+          for (var stride = ${workgroupSize}u / 2u; stride > 0u; stride >>= 1u) {
+            if (localIndex < stride) {
+              sharedData[localIndex] += sharedData[localIndex + stride];
+            }
+            workgroupBarrier();
+          }
+
+          if (localIndex == 0u) {
+            output[workgroupIndex] =  sharedData[0];
+          }
         }
-      }
-    `,
-  })
+      `,
+    })
+    passes.push({ module, workgroupCount, workgroupCountX, workgroupCountY })
+  }
+
+  const lastPassBufferIndex = (passes.length - 1) % 2
 
   const inputBuffer = device.createBuffer({
     size: input.byteLength,
@@ -625,18 +612,23 @@ const setupSumMulti = async (input: Int32Array) => {
   })
   device.queue.writeBuffer(inputBuffer, 0, input)
 
-  const outputBuffers = Array.from({ length: 2 }, (_, i) =>
-    device.createBuffer({
-      size: (workgroupCount * 4) / Math.max(1, tileSize * i),
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
-    }),
-  )
+  const outputBuffers = passes
+    .slice(0, 2)
+    .map(({ workgroupCount }, passIndex) =>
+      device.createBuffer({
+        size: workgroupCount * 4,
+        usage:
+          passIndex === lastPassBufferIndex
+            ? GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC
+            : GPUBufferUsage.STORAGE,
+      }),
+    )
   const stagingBuffer = device.createBuffer({
     size: 4,
     usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
   })
 
-  const sumBindGroupLayout = device.createBindGroupLayout({
+  const bindGroupLayout = device.createBindGroupLayout({
     entries: [
       {
         binding: 0,
@@ -651,43 +643,59 @@ const setupSumMulti = async (input: Int32Array) => {
     ],
   })
   const inputBindGroup = device.createBindGroup({
-    layout: sumBindGroupLayout,
+    layout: bindGroupLayout,
     entries: [
       { binding: 0, resource: { buffer: inputBuffer } },
       { binding: 1, resource: { buffer: outputBuffers[0] } },
     ],
   })
-  // TODO Use it and remove lint ignore
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const sumBindGroups = Array.from({ length: 2 }, (_, i) =>
-    device.createBindGroup({
-      layout: sumBindGroupLayout,
-      entries: [
-        { binding: 0, resource: { buffer: outputBuffers[i] } },
-        { binding: 1, resource: { buffer: outputBuffers[1 - i] } },
-      ],
+  const outputBindGroups = Array.from(
+    { length: Math.min(2, passes.length - 1) },
+    (_, i) =>
+      device.createBindGroup({
+        layout: bindGroupLayout,
+        entries: [
+          { binding: 0, resource: { buffer: outputBuffers[i] } },
+          { binding: 1, resource: { buffer: outputBuffers[1 - i] } },
+        ],
+      }),
+  )
+  const pipelineLayout = device.createPipelineLayout({
+    bindGroupLayouts: [bindGroupLayout],
+  })
+  const pipelines = passes.map(({ module }) =>
+    device.createComputePipeline({
+      layout: pipelineLayout,
+      compute: { module, entryPoint: 'main' },
     }),
   )
-  const sumPipelineLayout = device.createPipelineLayout({
-    bindGroupLayouts: [sumBindGroupLayout],
-  })
-  const sumPipeline = device.createComputePipeline({
-    layout: sumPipelineLayout,
-    compute: { module: sumModule, entryPoint: 'main' },
-  })
+
+  console.log({ passes, lastPassBufferIndex, outputBuffers })
 
   const sumMulti = async (): Promise<SumResult> => {
     const start = performance.now()
 
     const encoder = device.createCommandEncoder()
 
-    const sumPass = encoder.beginComputePass()
-    sumPass.setPipeline(sumPipeline)
-    sumPass.setBindGroup(0, inputBindGroup)
-    sumPass.dispatchWorkgroups(workgroupCountX, workgroupCountY)
-    sumPass.end()
+    passes.forEach(({ workgroupCountX, workgroupCountY }, passIndex) => {
+      const pass = encoder.beginComputePass()
+      pass.setPipeline(pipelines[passIndex])
+      if (passIndex === 0) {
+        pass.setBindGroup(0, inputBindGroup)
+      } else {
+        pass.setBindGroup(0, outputBindGroups[(passIndex - 1) % 2])
+      }
+      pass.dispatchWorkgroups(workgroupCountX, workgroupCountY)
+      pass.end()
+    })
 
-    encoder.copyBufferToBuffer(outputBuffers[0], 0, stagingBuffer, 0, 4)
+    encoder.copyBufferToBuffer(
+      outputBuffers[lastPassBufferIndex],
+      0,
+      stagingBuffer,
+      0,
+      4,
+    )
 
     const commands = encoder.finish()
     device.queue.submit([commands])
