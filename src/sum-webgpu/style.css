@@ -68,6 +68,19 @@ button {
   cursor: pointer;
 }
 
+footer {
+  display: grid;
+  grid-auto-flow: column;
+  justify-content: center;
+  column-gap: 40px;
+}
+
+.gpu__detail {
+  display: grid;
+  grid-auto-flow: column;
+  column-gap: 8px;
+}
+
 table {
   justify-self: center;
 }
