@@ -881,6 +881,10 @@ document.querySelector('button')!.onclick = async () => {
       let latestResult: number | undefined
       let timeSum = 0
       let runCount = 0
+
+      // Warm-up
+      await sum()
+
       if (runLimitType === 'count') {
         for (let i = 0; i < runLimit; i++) {
           const { result, time } = await sum()
