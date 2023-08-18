@@ -670,8 +670,6 @@ const setupSumMulti = async (input: Int32Array) => {
     }),
   )
 
-  console.log({ passes, lastPassBufferIndex, outputBuffers })
-
   const sumMulti = async (): Promise<SumResult> => {
     const start = performance.now()
 
@@ -748,7 +746,7 @@ const formatIntCount = (count: number) => {
 }
 
 const populateIntCountOptions = (selectElement: HTMLSelectElement) => {
-  for (let i = 2; i <= 26; i++) {
+  for (let i = 2; i <= 25; i++) {
     const count = 2 ** i
     const option = document.createElement('option')
     option.value = String(count)
