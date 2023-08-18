@@ -7,6 +7,7 @@ const adapter = await navigator.gpu.requestAdapter()
 if (!adapter) {
   throw Error("Couldn't request WebGPU adapter.")
 }
+const adapterInfo = await adapter.requestAdapterInfo()
 const device = await adapter.requestDevice()
 
 const generateInput = (count: number) => {
@@ -781,6 +782,14 @@ const setups = [
   setupSumVec,
   setupSumMulti,
 ]
+
+const updateGpuDetails = async () => {
+  document.querySelector('.gpu__vendor span')!.textContent = adapterInfo.vendor
+  document.querySelector('.gpu__architecture span')!.textContent =
+    adapterInfo.architecture
+}
+
+updateGpuDetails()
 
 const initTable = () => {
   const { minIntCount, maxIntCount } = params
