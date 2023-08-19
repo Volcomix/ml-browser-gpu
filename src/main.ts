@@ -57,7 +57,7 @@ const process = (
 }
 
 const fetchParameter = async (name: string) => {
-  const response = await fetch(`models/fashion-mnist/${name}.gz`)
+  const response = await fetch(`fashion-mnist/models/${name}.gz`)
   const buffer = await response.arrayBuffer()
   return new Float32Array(buffer)
 }
@@ -139,7 +139,7 @@ const loadInput = () => {
   return new Promise<WebGLTexture>((resolve, reject) =>
     twgl.createTexture(
       gl,
-      { src: 'data/fashion-mnist/0.png' },
+      { src: 'fashion-mnist/data/0.png' },
       (err, texture) => {
         if (err) {
           reject(err)

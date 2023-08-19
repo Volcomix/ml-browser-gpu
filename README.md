@@ -25,13 +25,13 @@ The source code is available in the directory [src/sum](src/sum).
 ## PyTorch Quickstart Tutorial (WebGL)
 
 To start simple, the model described in the [PyTorch Quickstart Tutorial](https://pytorch.org/tutorials/beginner/basics/quickstart_tutorial.html) has been implemented in WebGL.
-You can see some details in [the notebook](notebooks/fashion-mnist.ipynb).
+You can see some details in [the notebook](fashion-mnist/notebooks/fashion-mnist.ipynb).
 
 For now the source code is in [main.ts](src/main.ts)
 
 Here is an overview of the WebGL design:
 
-![](notebooks/fashion-mnist.png)
+![](fashion-mnist/notebooks/webgl-memory.png)
 
 ### Result
 

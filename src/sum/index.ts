@@ -1,3 +1,5 @@
+import '../benchmark.css'
+
 import { setupSumCPU } from './cpu'
 import { setupSumWebGL } from './webgl'
 import {
@@ -7,8 +9,6 @@ import {
   setupSumWebGPUTile,
   setupSumWebGPUVector,
 } from './webgpu'
-
-import './style.css'
 
 const setups = [
   setupSumCPU,
