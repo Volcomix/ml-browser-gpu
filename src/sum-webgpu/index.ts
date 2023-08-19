@@ -36,7 +36,7 @@ const setupSumCPU = (input: Int32Array) => {
   return sumCPU
 }
 
-const setupSumReduction = async (input: Int32Array) => {
+const setupSumWebGPUAtomic = async (input: Int32Array) => {
   const workgroupSize = Math.min(64, input.length)
 
   let workgroupCountX = input.length / workgroupSize
@@ -160,7 +160,7 @@ const setupSumReduction = async (input: Int32Array) => {
     compute: { module: sumModule, entryPoint: 'main' },
   })
 
-  const sumReduction = async (): Promise<SumResult> => {
+  const sumWebGPUAtomic = async (): Promise<SumResult> => {
     const start = performance.now()
 
     const encoder = device.createCommandEncoder()
@@ -193,10 +193,10 @@ const setupSumReduction = async (input: Int32Array) => {
     return { result, time }
   }
 
-  return sumReduction
+  return sumWebGPUAtomic
 }
 
-const setupSumTile = async (input: Int32Array) => {
+const setupSumWebGPUTile = async (input: Int32Array) => {
   const workgroupSize = Math.min(64, input.length)
   const workgroupsPerTile = Math.min(32, input.length / workgroupSize)
   const tileSize = workgroupSize * workgroupsPerTile
@@ -327,7 +327,7 @@ const setupSumTile = async (input: Int32Array) => {
     compute: { module: sumModule, entryPoint: 'main' },
   })
 
-  const sumTile = async (): Promise<SumResult> => {
+  const sumWebGPUTile = async (): Promise<SumResult> => {
     const start = performance.now()
 
     const encoder = device.createCommandEncoder()
@@ -360,10 +360,10 @@ const setupSumTile = async (input: Int32Array) => {
     return { result, time }
   }
 
-  return sumTile
+  return sumWebGPUTile
 }
 
-const setupSumVec = async (input: Int32Array) => {
+const setupSumWebGPUVector = async (input: Int32Array) => {
   const workgroupSize = Math.min(64, input.length / 4)
   const workgroupsPerTile = Math.min(8, input.length / 4 / workgroupSize)
   const tileSize = workgroupSize * workgroupsPerTile
@@ -495,7 +495,7 @@ const setupSumVec = async (input: Int32Array) => {
     compute: { module: sumModule, entryPoint: 'main' },
   })
 
-  const sumVec = async (): Promise<SumResult> => {
+  const sumWebGPUVector = async (): Promise<SumResult> => {
     const start = performance.now()
 
     const encoder = device.createCommandEncoder()
@@ -528,7 +528,7 @@ const setupSumVec = async (input: Int32Array) => {
     return { result, time }
   }
 
-  return sumVec
+  return sumWebGPUVector
 }
 
 type SumPass = {
@@ -538,7 +538,7 @@ type SumPass = {
   workgroupCountY: number
 }
 
-const setupSumMulti = async (input: Int32Array) => {
+const setupSumWebGPURecursive = async (input: Int32Array) => {
   const maxWorkgroupSize = 64
   const maxWorkgroupsPerTile = 32
 
@@ -671,7 +671,7 @@ const setupSumMulti = async (input: Int32Array) => {
     }),
   )
 
-  const sumMulti = async (): Promise<SumResult> => {
+  const sumWebGPURecursive = async (): Promise<SumResult> => {
     const start = performance.now()
 
     const encoder = device.createCommandEncoder()
@@ -710,7 +710,7 @@ const setupSumMulti = async (input: Int32Array) => {
     return { result, time }
   }
 
-  return sumMulti
+  return sumWebGPURecursive
 }
 
 type RunLimitType = 'count' | 'duration'
@@ -777,10 +777,10 @@ const waitForUIUpdate = () => new Promise((resolve) => setTimeout(resolve, 10))
 
 const setups = [
   setupSumCPU,
-  setupSumReduction,
-  setupSumTile,
-  setupSumVec,
-  setupSumMulti,
+  setupSumWebGPUAtomic,
+  setupSumWebGPUTile,
+  setupSumWebGPUVector,
+  setupSumWebGPURecursive,
 ]
 
 const updateGpuDetails = async () => {
