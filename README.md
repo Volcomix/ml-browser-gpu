@@ -16,6 +16,12 @@ The source code is available in the directory [src/sum](src/sum).
 
 ![](sum/screenshot.png)
 
+### References
+
+- https://developer.download.nvidia.com/assets/cuda/files/reduction.pdf
+- https://developer.nvidia.com/blog/cooperative-groups/
+- https://siboehm.com/articles/22/CUDA-MMM
+
 ## PyTorch Quickstart Tutorial (WebGL)
 
 To start simple, the model described in the [PyTorch Quickstart Tutorial](https://pytorch.org/tutorials/beginner/basics/quickstart_tutorial.html) has been implemented in WebGL.
