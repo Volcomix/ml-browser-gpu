@@ -2,6 +2,20 @@
 
 Various pre-trained machine learning models reimplemented to run on browsers through WebGL and WebGPU.
 
+## Parallel sum reduction
+
+Ok, this one isn't exactly an ML model but I wanted to experiment first with basic building blocks. This example consists in summing a large number of integers as quickly as possible.
+
+It's quite interesting to note that WebGPU isn't necessarily faster when we can combine WebGL with mipmaps.
+
+This example can be tested locally: http://localhost:5173/sum/.
+
+The source code is available in the directory [src/sum](src/sum).
+
+### Result
+
+![](sum/screenshot.png)
+
 ## PyTorch Quickstart Tutorial (WebGL)
 
 To start simple, the model described in the [PyTorch Quickstart Tutorial](https://pytorch.org/tutorials/beginner/basics/quickstart_tutorial.html) has been implemented in WebGL.
@@ -15,66 +29,26 @@ Here is an overview of the WebGL design:
 
 ### Result
 
-We can see that when the inference lasts longer, most of the time is spent reading the pixels, which are downloaded from the GPU to compute and log the end result.
-
-#### Chrome
-
 ```
 ----------------------------------------------------------------------------------------------------
 Output: -2.2995, -2.1135, -1.0424, -1.6524, -0.9015, 2.4404, -1.1452, 2.6658, 1.6956, 3.0893
 Predicted: Ankle boot
-GPU time: 0.8999999985098839ms
-Total time: 14.699999999254942ms
+Time: 14.699999999254942ms
 ----------------------------------------------------------------------------------------------------
 Output: -2.2995, -2.1135, -1.0424, -1.6524, -0.9015, 2.4404, -1.1452, 2.6658, 1.6956, 3.0893
 Predicted: Ankle boot
-GPU time: 0.09999999962747097ms
-Total time: 11.299999998882413ms
+Time: 11.299999998882413ms
 ----------------------------------------------------------------------------------------------------
 Output: -2.2995, -2.1135, -1.0424, -1.6524, -0.9015, 2.4404, -1.1452, 2.6658, 1.6956, 3.0893
 Predicted: Ankle boot
-GPU time: 0.30000000074505806ms
-Total time: 1.099999999627471ms
+Time: 1.099999999627471ms
 ----------------------------------------------------------------------------------------------------
 Output: -2.2995, -2.1135, -1.0424, -1.6524, -0.9015, 2.4404, -1.1452, 2.6658, 1.6956, 3.0893
 Predicted: Ankle boot
-GPU time: 0.09999999962747097ms
-Total time: 0.6999999992549419ms
+Time: 0.6999999992549419ms
 ----------------------------------------------------------------------------------------------------
 Output: -2.2995, -2.1135, -1.0424, -1.6524, -0.9015, 2.4404, -1.1452, 2.6658, 1.6956, 3.0893
 Predicted: Ankle boot
-GPU time: 0.19999999925494194ms
-Total time: 0.6999999992549419ms
-----------------------------------------------------------------------------------------------------
-```
-
-#### Firefox
-
-```
-----------------------------------------------------------------------------------------------------
-Output: -2.2995, -2.1135, -1.0424, -1.6524, -0.9015, 2.4404, -1.1452, 2.6658, 1.6956, 3.0893
-Predicted: Ankle boot
-GPU time: 0ms
-Total time: 23ms
-----------------------------------------------------------------------------------------------------
-Output: -2.2995, -2.1135, -1.0424, -1.6524, -0.9015, 2.4404, -1.1452, 2.6658, 1.6956, 3.0893
-Predicted: Ankle boot
-GPU time: 1ms
-Total time: 9ms
-----------------------------------------------------------------------------------------------------
-Output: -2.2995, -2.1135, -1.0424, -1.6524, -0.9015, 2.4404, -1.1452, 2.6658, 1.6956, 3.0893
-Predicted: Ankle boot
-GPU time: 0ms
-Total time: 1ms
-----------------------------------------------------------------------------------------------------
-Output: -2.2995, -2.1135, -1.0424, -1.6524, -0.9015, 2.4404, -1.1452, 2.6658, 1.6956, 3.0893
-Predicted: Ankle boot
-GPU time: 0ms
-Total time: 0ms
-----------------------------------------------------------------------------------------------------
-Output: -2.2995, -2.1135, -1.0424, -1.6524, -0.9015, 2.4404, -1.1452, 2.6658, 1.6956, 3.0893
-Predicted: Ankle boot
-GPU time: 1ms
-Total time: 30ms
+Time: 0.6999999992549419ms
 ----------------------------------------------------------------------------------------------------
 ```

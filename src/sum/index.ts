@@ -1,4 +1,5 @@
 import { setupSumCPU } from './cpu'
+import { setupSumWebGL } from './webgl'
 import {
   adapterInfo,
   setupSumWebGPUAtomic,
@@ -9,11 +10,18 @@ import {
 
 import './style.css'
 
+const setups = [
+  setupSumCPU,
+  setupSumWebGL,
+  setupSumWebGPUAtomic,
+  setupSumWebGPUTile,
+  setupSumWebGPUVector,
+  setupSumWebGPURecursive,
+]
+
 const generateInput = (count: number) => {
   const start = performance.now()
-  const input = Int32Array.from({ length: count }, () =>
-    Math.round(Math.random() * 10),
-  )
+  const input = new Uint32Array(count).fill(1)
   const time = performance.now() - start
   console.log(`${generateInput.name}: ${time} ms`)
   return input
@@ -80,14 +88,6 @@ const bindElement = (
 }
 
 const waitForUIUpdate = () => new Promise((resolve) => setTimeout(resolve, 10))
-
-const setups = [
-  setupSumCPU,
-  setupSumWebGPUAtomic,
-  setupSumWebGPUTile,
-  setupSumWebGPUVector,
-  setupSumWebGPURecursive,
-]
 
 const updateGpuDetails = async () => {
   document.querySelector('.gpu__vendor span')!.textContent = adapterInfo.vendor

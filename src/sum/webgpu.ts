@@ -11,7 +11,7 @@ const device = await adapter.requestDevice()
 
 export const adapterInfo = await adapter.requestAdapterInfo()
 
-export const setupSumWebGPUAtomic = async (input: Int32Array) => {
+export const setupSumWebGPUAtomic = async (input: Uint32Array) => {
   const workgroupSize = Math.min(64, input.length)
 
   let workgroupCountX = input.length / workgroupSize
@@ -159,7 +159,7 @@ export const setupSumWebGPUAtomic = async (input: Int32Array) => {
 
     await stagingBuffer.mapAsync(GPUMapMode.READ)
 
-    const stagingData = new Int32Array(stagingBuffer.getMappedRange())
+    const stagingData = new Uint32Array(stagingBuffer.getMappedRange())
     const result = stagingData[0]
     stagingBuffer.unmap()
 
@@ -171,7 +171,7 @@ export const setupSumWebGPUAtomic = async (input: Int32Array) => {
   return sumWebGPUAtomic
 }
 
-export const setupSumWebGPUTile = async (input: Int32Array) => {
+export const setupSumWebGPUTile = async (input: Uint32Array) => {
   const workgroupSize = Math.min(64, input.length)
   const workgroupsPerTile = Math.min(32, input.length / workgroupSize)
   const tileSize = workgroupSize * workgroupsPerTile
@@ -326,7 +326,7 @@ export const setupSumWebGPUTile = async (input: Int32Array) => {
 
     await stagingBuffer.mapAsync(GPUMapMode.READ)
 
-    const stagingData = new Int32Array(stagingBuffer.getMappedRange())
+    const stagingData = new Uint32Array(stagingBuffer.getMappedRange())
     const result = stagingData[0]
     stagingBuffer.unmap()
 
@@ -338,7 +338,7 @@ export const setupSumWebGPUTile = async (input: Int32Array) => {
   return sumWebGPUTile
 }
 
-export const setupSumWebGPUVector = async (input: Int32Array) => {
+export const setupSumWebGPUVector = async (input: Uint32Array) => {
   const workgroupSize = Math.min(64, input.length / 4)
   const workgroupsPerTile = Math.min(8, input.length / 4 / workgroupSize)
   const tileSize = workgroupSize * workgroupsPerTile
@@ -494,7 +494,7 @@ export const setupSumWebGPUVector = async (input: Int32Array) => {
 
     await stagingBuffer.mapAsync(GPUMapMode.READ)
 
-    const stagingData = new Int32Array(stagingBuffer.getMappedRange())
+    const stagingData = new Uint32Array(stagingBuffer.getMappedRange())
     const result = stagingData[0]
     stagingBuffer.unmap()
 
@@ -513,7 +513,7 @@ type SumPass = {
   workgroupCountY: number
 }
 
-export const setupSumWebGPURecursive = async (input: Int32Array) => {
+export const setupSumWebGPURecursive = async (input: Uint32Array) => {
   const maxWorkgroupSize = 64
   const maxWorkgroupsPerTile = 32
 
@@ -676,7 +676,7 @@ export const setupSumWebGPURecursive = async (input: Int32Array) => {
 
     await stagingBuffer.mapAsync(GPUMapMode.READ)
 
-    const stagingData = new Int32Array(stagingBuffer.getMappedRange())
+    const stagingData = new Uint32Array(stagingBuffer.getMappedRange())
     const result = stagingData[0]
     stagingBuffer.unmap()
 

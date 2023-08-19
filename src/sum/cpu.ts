@@ -1,6 +1,6 @@
 import { SumResult } from './types'
 
-export const setupSumCPU = (input: Int32Array) => {
+export const setupSumCPU = (input: Uint32Array) => {
   const sumCPU = (): SumResult => {
     const start = performance.now()
     const result = input.reduce((a, b) => a + b)

@@ -340,17 +340,15 @@ for (let i = 0; i < 5; i++) {
   console.log(separator)
 
   const start = performance.now()
-  predict()
-  const gpuTime = performance.now() - start
 
+  predict()
   gl.readPixels(0, 0, 1, 3, gl.RGBA, gl.FLOAT, outputData)
   const predicted = classes[argmax(output)]
 
-  const totalTime = performance.now() - start
+  const time = performance.now() - start
 
   console.log(`Output: ${format(output, 4)}`)
   console.log(`Predicted: ${predicted}`)
-  console.log(`GPU time: ${gpuTime}ms`)
-  console.log(`Total time: ${totalTime}ms`)
+  console.log(`Time: ${time}ms`)
 }
 console.log(separator)
