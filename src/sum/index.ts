@@ -175,7 +175,7 @@ document.querySelector('button')!.onclick = async () => {
     const input = generateInput(count)
     const means: Record<string, number> = {}
     for (const setupSum of setups) {
-      const sum = await setupSum(input)
+      const sum = setupSum(input)
 
       const id = `${sum.name}-${count}`
 

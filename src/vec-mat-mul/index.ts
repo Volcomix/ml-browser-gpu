@@ -1,10 +1,10 @@
 import '../benchmark.css'
 
 import { setupVecMatMulCPU } from './cpu'
-import { adapterInfo } from './webgpu'
+import { adapterInfo, setupVecMatMulWebGPUSimple } from './webgpu'
 
 const sizes = ['784x512']
-const setups = [setupVecMatMulCPU]
+const setups = [setupVecMatMulCPU, setupVecMatMulWebGPUSimple]
 
 const loadX = async () => {
   const response = await fetch(`/fashion-mnist/data/0.png`)
@@ -127,26 +127,26 @@ document.querySelector('button')!.onclick = async () => {
 
     let firstResult: Float32Array | undefined
     const means: Record<string, number> = {}
-    for (const setupMultiply of setups) {
-      const multiply = await setupMultiply(x, a)
+    for (const setup of setups) {
+      const func = setup(x, a)
 
-      const id = `${multiply.name}-${size}`
+      const id = `${func.name}-${size}`
 
       const cell = document.getElementById(id)!
       cell.textContent = 'running...'
       await waitForUIUpdate()
 
-      console.groupCollapsed(multiply.name)
+      console.groupCollapsed(func.name)
       let latestResult: Float32Array | undefined
       let timeSum = 0
       let runCount = 0
 
       // Warm-up
-      await multiply()
+      await func()
 
       if (runLimitType === 'count') {
         for (let i = 0; i < runLimit; i++) {
-          const { result, time } = await multiply()
+          const { result, time } = await func()
           console.log(`time: ${time} ms`)
           latestResult = result
           timeSum += time
@@ -155,7 +155,7 @@ document.querySelector('button')!.onclick = async () => {
       } else {
         const start = performance.now()
         while (performance.now() - start < runLimit) {
-          const { result, time } = await multiply()
+          const { result, time } = await func()
           console.log(`time: ${time} ms`)
           latestResult = result
           timeSum += time
@@ -171,7 +171,7 @@ document.querySelector('button')!.onclick = async () => {
       if (
         latestResult?.every((value, index) => firstResult?.[index] === value)
       ) {
-        means[`${multiply.name}-${size}`] = timeSum / runCount
+        means[`${func.name}-${size}`] = timeSum / runCount
         cell.textContent = 'completed'
       } else {
         cell.textContent = 'ERROR'
