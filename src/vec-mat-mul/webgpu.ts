@@ -255,7 +255,7 @@ export const setupVecMatMulWebGPUSharedMem = (
     @group(0) @binding(2)
     var<storage, read_write> y: array<f32>;
 
-    var<workgroup> sharedData: array<f32, ${x.length}>;
+    var<workgroup> xShared: array<f32, ${x.length}>;
 
     @compute @workgroup_size(${workgroupSize})
     fn main(
@@ -266,14 +266,14 @@ export const setupVecMatMulWebGPUSharedMem = (
       localInvocationId: vec3u,
     ) {
       for (var i = localInvocationId.x; i < ${x.length}u; i += ${workgroupSize}u) {
-        sharedData[i] = x[i];
+        xShared[i] = x[i];
       }
       workgroupBarrier();
 
       let row = globalInvocationId.x;
       var sum = 0f;
       for (var i = 0u; i < ${x.length}u; i++) {
-        sum += a[i * ${yLength}u + row] * sharedData[i];
+        sum += a[i * ${yLength}u + row] * xShared[i];
       }
       y[row] = sum;
     }
