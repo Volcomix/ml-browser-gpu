@@ -4,6 +4,7 @@ import { setupVecMatMulCPU } from './cpu'
 import {
   adapterInfo,
   setupVecMatMulWebGPUGlobMemCoalesce,
+  setupVecMatMulWebGPUSharedMem,
   setupVecMatMulWebGPUSimple,
 } from './webgpu'
 
@@ -12,6 +13,7 @@ const setups = [
   setupVecMatMulCPU,
   setupVecMatMulWebGPUSimple,
   setupVecMatMulWebGPUGlobMemCoalesce,
+  setupVecMatMulWebGPUSharedMem,
 ]
 
 const loadX = async () => {

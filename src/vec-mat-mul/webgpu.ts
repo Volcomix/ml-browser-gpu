@@ -217,7 +217,7 @@ export const setupVecMatMulWebGPUGlobMemCoalesce = (
       let row = globalInvocationId.x;
       var sum = 0f;
       for (var i = 0u; i < ${x.length}u; i++) {
-        sum += a[i * ${yLength} + row] * x[i];
+        sum += a[i * ${yLength}u + row] * x[i];
       }
       y[row] = sum;
     }
@@ -225,6 +225,62 @@ export const setupVecMatMulWebGPUGlobMemCoalesce = (
 
   return setupCompute(
     'vecMatMulWebGPUGlobMemCoalesce',
+    shaderCode,
+    x,
+    aTransposed,
+    yLength,
+  )
+}
+
+export const setupVecMatMulWebGPUSharedMem = (
+  x: Float32Array,
+  a: Float32Array,
+) => {
+  const yLength = a.length / x.length
+
+  const aTransposed = new Float32Array(a.length)
+  for (let row = 0; row < x.length; row++) {
+    for (let col = 0; col < yLength; col++) {
+      aTransposed[row * yLength + col] = a[col * x.length + row]
+    }
+  }
+
+  const shaderCode = /* wgsl */ `
+    @group(0) @binding(0)
+    var<storage> x: array<f32>;
+
+    @group(0) @binding(1)
+    var<storage> a: array<f32>;
+
+    @group(0) @binding(2)
+    var<storage, read_write> y: array<f32>;
+
+    var<workgroup> sharedData: array<f32, ${x.length}>;
+
+    @compute @workgroup_size(${workgroupSize})
+    fn main(
+      @builtin(global_invocation_id)
+      globalInvocationId: vec3u,
+
+      @builtin(local_invocation_id)
+      localInvocationId: vec3u,
+    ) {
+      for (var i = localInvocationId.x; i < ${x.length}u; i += ${workgroupSize}u) {
+        sharedData[i] = x[i];
+      }
+      workgroupBarrier();
+
+      let row = globalInvocationId.x;
+      var sum = 0f;
+      for (var i = 0u; i < ${x.length}u; i++) {
+        sum += a[i * ${yLength}u + row] * sharedData[i];
+      }
+      y[row] = sum;
+    }
+  `
+
+  return setupCompute(
+    'vecMatMulWebGPUSharedMem',
     shaderCode,
     x,
     aTransposed,
