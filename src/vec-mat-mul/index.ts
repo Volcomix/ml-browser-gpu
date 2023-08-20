@@ -6,6 +6,7 @@ import {
   setupVecMatMulWebGPUGlobMemCoalesce,
   setupVecMatMulWebGPUSharedMem,
   setupVecMatMulWebGPUSimple,
+  setupVecMatMulWebGPUTile,
 } from './webgpu'
 
 const sizes = ['784x512']
@@ -14,6 +15,7 @@ const setups = [
   setupVecMatMulWebGPUSimple,
   setupVecMatMulWebGPUGlobMemCoalesce,
   setupVecMatMulWebGPUSharedMem,
+  setupVecMatMulWebGPUTile,
 ]
 
 const loadX = async () => {

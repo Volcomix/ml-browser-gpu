@@ -107,6 +107,7 @@ const setupCompute = (
   x: Float32Array,
   a: Float32Array,
   yLength: number,
+  workgroupCount = yLength / workgroupSize,
 ) => {
   const module = createModule(shaderCode)
   const buffers = createBuffers(x, a, yLength)
@@ -126,7 +127,7 @@ const setupCompute = (
       const pass = encoder.beginComputePass()
       pass.setPipeline(pipeline)
       pass.setBindGroup(0, bindGroup)
-      pass.dispatchWorkgroups(yLength / workgroupSize)
+      pass.dispatchWorkgroups(workgroupCount)
       pass.end()
 
       encoder.copyBufferToBuffer(
@@ -285,5 +286,62 @@ export const setupVecMatMulWebGPUSharedMem = (
     x,
     aTransposed,
     yLength,
+  )
+}
+
+export const setupVecMatMulWebGPUTile = (x: Float32Array, a: Float32Array) => {
+  const yLength = a.length / x.length
+  const stride = yLength / 2
+
+  const aTransposed = new Float32Array(a.length)
+  for (let row = 0; row < x.length; row++) {
+    for (let col = 0; col < yLength; col++) {
+      aTransposed[row * yLength + col] = a[col * x.length + row]
+    }
+  }
+
+  const shaderCode = /* wgsl */ `
+    @group(0) @binding(0)
+    var<storage> x: array<f32>;
+
+    @group(0) @binding(1)
+    var<storage> a: array<f32>;
+
+    @group(0) @binding(2)
+    var<storage, read_write> y: array<f32>;
+
+    var<workgroup> xShared: array<f32, ${x.length}>;
+
+    @compute @workgroup_size(${workgroupSize})
+    fn main(
+      @builtin(global_invocation_id)
+      globalInvocationId: vec3u,
+
+      @builtin(local_invocation_id)
+      localInvocationId: vec3u,
+    ) {
+      for (var i = localInvocationId.x; i < ${x.length}u; i += ${workgroupSize}u) {
+        xShared[i] = x[i];
+      }
+      workgroupBarrier();
+
+      for (var row = globalInvocationId.x; row < ${yLength}u; row += ${stride}u) {
+        var sum = 0f;
+        for (var i = 0u; i < ${x.length}u; i++) {
+          // TODO Read xShared[i] in outer loop to do it only once per multiple tiles
+          sum += a[i * ${yLength}u + row] * xShared[i];
+        }
+        y[row] = sum;
+      }
+    }
+  `
+
+  return setupCompute(
+    'vecMatMulWebGPUTile',
+    shaderCode,
+    x,
+    aTransposed,
+    yLength,
+    stride / workgroupSize,
   )
 }
