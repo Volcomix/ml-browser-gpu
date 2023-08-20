@@ -99,6 +99,7 @@ export const setupVecMatMulWebGPUSimple = (
   x: Float32Array,
   a: Float32Array,
 ) => {
+  const yLength = a.length / x.length
   const workgroupSize = 64
 
   const module = device.createShaderModule({
@@ -127,7 +128,6 @@ export const setupVecMatMulWebGPUSimple = (
     `,
   })
 
-  const yLength = a.length / x.length
   const buffers = createBuffers(x, a, yLength)
   const bindGroupLayout = createBindGroupLayout()
   const bindGroup = createBindGroup(bindGroupLayout, buffers)
@@ -164,4 +164,84 @@ export const setupVecMatMulWebGPUSimple = (
   }
 
   return vecMatMulWebGPUSimple
+}
+
+export const setupVecMatMulWebGPUGlobMemCoalesce = (
+  x: Float32Array,
+  a: Float32Array,
+) => {
+  const yLength = a.length / x.length
+
+  const aTransposed = new Float32Array(a.length)
+  for (let row = 0; row < x.length; row++) {
+    for (let col = 0; col < yLength; col++) {
+      aTransposed[row * yLength + col] = a[col * x.length + row]
+    }
+  }
+
+  const workgroupSize = 64
+
+  const module = device.createShaderModule({
+    code: /* wgsl */ `
+      @group(0) @binding(0)
+      var<storage> x: array<f32>;
+
+      @group(0) @binding(1)
+      var<storage> a: array<f32>;
+
+      @group(0) @binding(2)
+      var<storage, read_write> y: array<f32>;
+
+      @compute @workgroup_size(${workgroupSize})
+      fn main(
+        @builtin(global_invocation_id)
+        globalInvocationId: vec3u,
+      ) {
+        let row = globalInvocationId.x;
+        var sum = 0f;
+        for (var i = 0u; i < ${x.length}u; i++) {
+          sum += a[i * ${yLength} + row] * x[i];
+        }
+        y[row] = sum;
+      }
+    `,
+  })
+
+  // TODO Factorize
+  const buffers = createBuffers(x, aTransposed, yLength) // Diff with previous implementation
+  const bindGroupLayout = createBindGroupLayout()
+  const bindGroup = createBindGroup(bindGroupLayout, buffers)
+  const pipelineLayout = createPipelineLayout(bindGroupLayout)
+  const pipeline = createPipeline(pipelineLayout, module)
+
+  const result = new Float32Array(yLength)
+
+  const vecMatMulWebGPUGlobMemCoalesce = async (): Promise<VecMatMulResult> => {
+    const start = performance.now()
+
+    const encoder = device.createCommandEncoder()
+
+    const pass = encoder.beginComputePass()
+    pass.setPipeline(pipeline)
+    pass.setBindGroup(0, bindGroup)
+    pass.dispatchWorkgroups(yLength / workgroupSize)
+    pass.end()
+
+    encoder.copyBufferToBuffer(buffers.y, 0, buffers.staging, 0, buffers.y.size)
+
+    const commands = encoder.finish()
+    device.queue.submit([commands])
+
+    await buffers.staging.mapAsync(GPUMapMode.READ)
+
+    const arrayBuffer = new Float32Array(buffers.staging.getMappedRange())
+    result.set(arrayBuffer, 0)
+    buffers.staging.unmap()
+
+    const time = performance.now() - start
+
+    return { result, time }
+  }
+
+  return vecMatMulWebGPUGlobMemCoalesce
 }

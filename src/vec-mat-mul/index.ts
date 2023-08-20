@@ -1,10 +1,18 @@
 import '../benchmark.css'
 
 import { setupVecMatMulCPU } from './cpu'
-import { adapterInfo, setupVecMatMulWebGPUSimple } from './webgpu'
+import {
+  adapterInfo,
+  setupVecMatMulWebGPUGlobMemCoalesce,
+  setupVecMatMulWebGPUSimple,
+} from './webgpu'
 
 const sizes = ['784x512']
-const setups = [setupVecMatMulCPU, setupVecMatMulWebGPUSimple]
+const setups = [
+  setupVecMatMulCPU,
+  setupVecMatMulWebGPUSimple,
+  setupVecMatMulWebGPUGlobMemCoalesce,
+]
 
 const loadX = async () => {
   const response = await fetch(`/fashion-mnist/data/0.png`)
