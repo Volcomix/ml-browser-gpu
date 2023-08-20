@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ML Browser GPU - Vector-Matrix Multiplication</title>
+  </head>
+  <body>
+    <header>
+      <label>
+        Run limit
+        <input name="runLimit" type="number" min="0" />
+        <select name="runLimitType">
+          <option value="count">iterations</option>
+          <option value="duration">ms</option>
+        </select>
+      </label>
+      <button>Run</button>
+    </header>
+    <table>
+      <thead>
+        <tr></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+    <footer>
+      <div class="gpu__detail gpu__vendor"><b>GPU vendor:</b><span></span></div>
+      <div class="gpu__detail gpu__architecture">
+        <b>GPU architecture:</b><span></span>
+      </div>
+    </footer>
+    <script type="module" src="/src/vec-mat-mul"></script>
+  </body>
+</html>

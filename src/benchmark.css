@@ -24,8 +24,7 @@ body {
 }
 
 header {
-  display: grid;
-  grid-template-columns: repeat(3, auto) 1fr;
+  display: flex;
   column-gap: 16px;
 }
 
@@ -83,14 +82,6 @@ footer {
 
 table {
   justify-self: center;
-}
-
-thead tr:first-of-type {
-  font-size: 14px;
-
-  & th {
-    padding-block: 8px;
-  }
 }
 
 td {
