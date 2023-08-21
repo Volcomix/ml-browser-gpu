@@ -291,7 +291,8 @@ export const setupVecMatMulWebGPUSharedMem = (
 
 export const setupVecMatMulWebGPUTile = (x: Float32Array, a: Float32Array) => {
   const yLength = a.length / x.length
-  const stride = yLength / 2
+  const tileCount = 2
+  const stride = yLength / tileCount
 
   const aTransposed = new Float32Array(a.length)
   for (let row = 0; row < x.length; row++) {
@@ -320,18 +321,26 @@ export const setupVecMatMulWebGPUTile = (x: Float32Array, a: Float32Array) => {
       @builtin(local_invocation_id)
       localInvocationId: vec3u,
     ) {
-      for (var i = localInvocationId.x; i < ${x.length}u; i += ${workgroupSize}u) {
+      for (
+        var i = localInvocationId.x;
+        i < ${x.length}u;
+        i += ${workgroupSize}u
+      ) {
         xShared[i] = x[i];
       }
       workgroupBarrier();
 
-      for (var row = globalInvocationId.x; row < ${yLength}u; row += ${stride}u) {
-        var sum = 0f;
-        for (var i = 0u; i < ${x.length}u; i++) {
-          // TODO Read xShared[i] in outer loop to do it only once per multiple tiles
-          sum += a[i * ${yLength}u + row] * xShared[i];
+      var sums = array<f32, ${tileCount}>();
+      for (var i = 0u; i < ${x.length}u; i++) {
+        let xValue = xShared[i];
+        for (var tile = 0u; tile < ${tileCount}u; tile++) {
+          let row = globalInvocationId.x + tile * ${stride}u;
+          sums[tile] += a[i * ${yLength}u + row] * xValue;
         }
-        y[row] = sum;
+      }
+      for (var tile = 0u; tile < ${tileCount}u; tile++) {
+        let row = globalInvocationId.x + tile * ${stride}u;
+        y[row] = sums[tile];
       }
     }
   `
