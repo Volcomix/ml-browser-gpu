@@ -9,7 +9,7 @@ if (!adapter) {
 }
 const device = await adapter.requestDevice()
 
-export const adapterInfo = await adapter.requestAdapterInfo()
+export const adapterInfo = adapter.info
 
 type Buffers = {
   x: GPUBuffer

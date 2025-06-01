@@ -9,7 +9,7 @@ if (!adapter) {
 }
 const device = await adapter.requestDevice()
 
-export const adapterInfo = await adapter.requestAdapterInfo()
+export const adapterInfo = adapter.info
 
 export const setupSumWebGPUAtomic = (input: Uint32Array) => {
   const workgroupSize = Math.min(64, input.length)
