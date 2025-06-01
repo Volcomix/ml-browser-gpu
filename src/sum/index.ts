@@ -6,6 +6,7 @@ import {
   adapterInfo,
   setupSumWebGPUAtomic,
   setupSumWebGPURecursive,
+  setupSumWebGPUSubgroup,
   setupSumWebGPUTile,
   setupSumWebGPUVector,
 } from './webgpu'
@@ -17,6 +18,7 @@ const setups = [
   setupSumWebGPUTile,
   setupSumWebGPUVector,
   setupSumWebGPURecursive,
+  setupSumWebGPUSubgroup,
 ]
 
 const generateInput = (count: number) => {
